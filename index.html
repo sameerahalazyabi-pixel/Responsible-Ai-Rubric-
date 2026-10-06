@@ -469,7 +469,7 @@ const RULES = [
 
 const MAX = 27;
 const FACES = ["Say","Do"];
-const HEADERS = ["Organization","Coder","Dimension","Facet",
+const HEADERS = ["Organization","Coder","Cut-off date","Dimension","Facet",
                  "Criteria 0-3 (reference)","المعايير (مرجع)",
                  "Score","Source title","URL","Accessed","Locator","Quotation",
                  "Finding type","Reasoning"];
@@ -544,11 +544,11 @@ function templateRows(org, coder, cutoff){
   DIMS.forEach(d=>{
     FACES.forEach(face=>{
       const crit = face === "Say" ? d.say : d.do;
-      out.push([org, coder,
+      out.push([org, coder, cutoff,
         `D${d.n} ${d.en}`, face,
         crit.map((c,i)=>`${i} = ${c[0]}`).join("  ·  "),
         crit.map((c,i)=>`${i} = ${c[1]}`).join("  ·  "),
-        "", "", "", cutoff, "", "", "", ""]);
+        "", "", "", "", "", "", "", ""]);
     });
   });
   return out;
@@ -585,7 +585,7 @@ function readForm(text, filename){
 
   const head = aoa[0].map(x=>norm(x).toLowerCase());
   const col = key => head.findIndex(h=>h.startsWith(key));
-  const cOrg = col("organization"), cCoder = col("coder"),
+  const cOrg = col("organization"), cCoder = col("coder"), cCut = col("cut-off"),
         cDim = col("dimension"), cFace = col("facet") >= 0 ? col("facet") : col("face"),
         cScore = col("score"), cTitle = col("source title"), cUrl = col("url"),
         cAcc = col("accessed"), cLoc = col("locator"), cQuote = col("quotation"),
@@ -600,7 +600,7 @@ function readForm(text, filename){
     if(!norm(r[cDim]) && !norm(r[cFace])) return;
     org    = org    || norm(r[cOrg]);
     coder  = coder  || norm(r[cCoder]);
-    cutoff = cutoff || norm(r[cAcc]);
+    cutoff = cutoff || norm(r[cCut]);
 
     const di = dimIndexOf(r[cDim]);
     const face = /^do/i.test(norm(r[cFace])) ? "Do"
@@ -630,9 +630,9 @@ function readForm(text, filename){
       issues.push({line, why:`${tag}: no reasoning. Every decision records why this level and not the one above or below.`,
                    ar:"بلا تسبيب. يُسجَّل لكل قرار سبب اختيار هذا المستوى دون ما فوقه أو دونه."}); return;
     }
-    if(s > 0 && (!title || !url || !quote)){
-      issues.push({line, why:`${tag}: a score above zero requires a source title, a URL and the quotation it rests on.`,
-                   ar:"تتطلب الدرجة فوق الصفر عنوان المصدر ورابطه والاقتباس الذي تستند إليه."}); return;
+    if(s > 0 && (!title || !url || !quote || !acc)){
+      issues.push({line, why:`${tag}: a score above zero requires a source title, a URL, the date it was accessed, and the quotation it rests on.`,
+                   ar:"تتطلب الدرجة فوق الصفر عنوان المصدر ورابطه وتاريخ الاطّلاع عليه والاقتباس الذي تستند إليه."}); return;
     }
     if(seen[tag]){
       issues.push({line, why:`${tag}: this cell is filled in more than once.`,
@@ -698,11 +698,16 @@ function renderTabs(){
 
 function renderStart(){
   const today = new Date().toISOString().slice(0,10);
+  const cuts = [...new Set(SETS.filter(s=>s.rows.length && s.cutoff).map(s=>s.cutoff))];
+  const cutWarn = cuts.length > 1 ? `<p class="note" style="color:var(--bad);margin-top:12px">
+      The uploaded files carry different cut-off dates — ${cuts.map(esc).join(" · ")}. A single fixed
+      coding window applies to the whole study.
+      <em>تحمل الملفات المرفوعة تواريخ إقفال مختلفة. ونافذة الترميز واحدة ثابتة للدراسة كلها.</em></p>` : "";
   const sets = SETS.map(s=>{
     const t = totals(s);
     const ok = s.rows.length, bad = s.issues.length;
     return `<div class="setrow">
-      <div class="who">${esc(setLabel(s))}<i>${esc(s.file)}</i></div>
+      <div class="who">${esc(setLabel(s))}<i>${esc(s.file)}${s.cutoff?" · cut-off "+esc(s.cutoff):""}</i></div>
       <div class="st" style="color:${bad?"var(--warn)":"var(--good)"}">
         ${ok}/18${bad?` · ${bad} rejected`:""}</div>
       <button class="x" data-del="${s.id}" title="Remove">✕</button>
@@ -733,12 +738,14 @@ function renderStart(){
     <h3>1 · The form</h3>
     <div class="arh">النموذج — ملف يُفتح في إكسل، تصحبه المعايير كاملةً</div>
     <p>The form carries all nine dimensions, both faces and the criteria for every level, in English and Arabic. Each coder fills their own copy, so both follow the same procedure and both leave a record.</p>
+    <p class="note" style="margin-bottom:12px">The cut-off date is one fixed date for the whole study — the close of the collection window — and is written into every row. The date each source was opened goes in the Accessed column, row by row.
+      <em>تاريخ الإقفال واحد ثابت للدراسة كلها، وهو نهاية نافذة جمع الأدلة، ويُكتب في كل صف. أما تاريخ الاطّلاع على كل مصدر فيُسجَّل في عمود Accessed صفاً صفاً.</em></p>
     <div class="row">
       <div class="field" style="width:200px"><label for="f-org">Organization <span>المنظمة</span></label>
         <input type="text" id="f-org" placeholder="stc"></div>
       <div class="field" style="width:170px"><label for="f-coder">Coder <span>المُرمِّز</span></label>
         <input type="text" id="f-coder" placeholder="Coder 1"></div>
-      <div class="field" style="width:160px"><label for="f-cutoff">Cut-off date <span>تاريخ الإقفال</span></label>
+      <div class="field" style="width:170px"><label for="f-cutoff">Cut-off date <span>تاريخ الإقفال</span></label>
         <input type="date" id="f-cutoff" value="${today}"></div>
       <button class="btn primary" id="getform">Download — تنزيل</button>
       <span class="note" id="f-msg"></span>
@@ -754,7 +761,7 @@ function renderStart(){
       <input type="file" id="files" multiple accept=".csv,text/csv" hidden>
     </div>
     <div style="margin-top:14px">${sets || `<p class="note">No file uploaded yet.
-      <em>لم يُرفَع ملف بعد.</em></p>`}</div>
+      <em>لم يُرفَع ملف بعد.</em></p>`}</div>${cutWarn}
   </div>`;
   document.getElementById("f-cutoff").value = today;
 }
