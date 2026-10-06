@@ -299,9 +299,8 @@ td.num{font-family:var(--f-num);font-variant-numeric:tabular-nums;text-align:cen
 <header class="mast">
   <div class="wrap mast-in">
     <div class="brand">
-      <div class="kicker">OECD · NIST AI RMF · SDAIA — nine dimensions, 27 points</div>
       <h1>Say–Do Coding Desk</h1>
-      <div class="sub">منصة ترميز فجوة القول والفعل — لا تُسجَّل درجة قبل تسجيل دليلها</div>
+      <div class="sub">أداة قياس الفجوة بين ما تعلنه المنظمة وما تفعله</div>
     </div>
     <div class="ctrls">
       <div class="field" style="width:168px">
@@ -325,7 +324,6 @@ td.num{font-family:var(--f-num);font-variant-numeric:tabular-nums;text-align:cen
 <div class="strip"><div class="wrap"><div class="strip-in" id="strip"></div>
   <div class="prog"><i id="progbar" style="width:0%"></i></div>
   <div class="note" style="padding:7px 0 9px" id="progtext"></div>
-  <div class="note modeline" id="modeline"></div>
 </div></div>
 
 <main class="wrap">
@@ -557,34 +555,12 @@ const RULES = [
 ];
 
 const DEFAULT_ORGS = [
-  {id:"org_stc",    name:"stc",          group:"Saudi"},
-  {id:"org_aramco", name:"Saudi Aramco", group:"Saudi"},
-  {id:"org_msft",   name:"Microsoft",    group:"Global"},
-  {id:"org_google", name:"Google",       group:"Global"}
+  {id:"org_stc",    name:"stc"},
+  {id:"org_aramco", name:"Saudi Aramco"},
+  {id:"org_msft",   name:"Microsoft"},
+  {id:"org_google", name:"Google"}
 ];
 const MAX = 27;
-
-/* ---------- the pilot, available as a worked example ---------- */
-const PILOT = [
- [2,"p.18: “stc established a comprehensive Responsible AI governance framework in 2025, supported by formal policies designed to mitigate implementation risks.” Commitment is organization-wide but names no body, role or decision right.","Executive Summary 2025, p.18",
-  1,"p.17: the Cybersecurity Synergy and Enablement Committee is named, but its remit is cybersecurity, not AI. No AI owner, no published remit, no ISO/IEC 42001.","Executive Summary 2025, p.17"],
- [1,"p.18: policies “designed to mitigate implementation risks.” Risk is named only in passing, with no method, trigger or classification.","Executive Summary 2025, p.18",
-  0,"Searched the document for risk taxonomy, register and assessment language. AI risk is not identified anywhere in it.",""],
- [0,"Searched for any commitment to test, benchmark or evaluate AI systems. None appears. Absence, not weakness.","",
-  1,"p.18: “stc certified 22 reusable AI models and registered more than 90 models.” A certification gate evidently exists, but no criteria, methodology, assessor or outcome is published.","Executive Summary 2025, p.18"],
- [1,"p.18: mitigation is asserted without stating what is mitigated, how, or the conditions for halting deployment.","Executive Summary 2025, p.18",
-  0,"No AI incident channel, taxonomy or disclosed case appears in this document.",""],
- [1,"p.16: “transparency through governance reports” — in the personal-data sense, not for AI systems.","Executive Summary 2025, p.16",
-  0,"No model documentation and no AI disclosure. The words explainability, algorithm and bias do not appear in the document.",""],
- [1,"p.16: human rights commitment covering dignity and non-discrimination for people, not for algorithmic outcomes.","Executive Summary 2025, p.16",
-  0,"No bias testing, no fairness metric, no demographic performance breakdown.",""],
- [1,"p.18: AI is to be “developed and deployed responsibly, ethically and securely.” A general assurance with no threshold or failure handling.","Executive Summary 2025, p.18",
-  0,"No reliability or failure data for any AI system in this document.",""],
- [3,"p.17: the Data Protection and Privacy Framework sets “10 core principles that every employee must uphold”; p.16: the Privacy Notice names the PDPL and CST standards and states what is done with personal data.","Executive Summary 2025, pp.16–17",
-  2,"p.16: audits, staff training and governance reporting described; p.17: Cybersecurity Policy covering 19 security domains. This document names no officer, no certificate and no metric.","Executive Summary 2025, pp.16–17"],
- [0,"Searched for oversight, review, approval and escalation language in connection with AI. None appears.","",
-  0,"No human-in-the-loop, review, override or escalation requirement for AI-assisted decisions.",""]
-];
 
 /* ===================== STATE ===================== */
 const KEY = "saydo.v3";
@@ -596,7 +572,7 @@ function seed(){
   const d = {}, c = {};
   orgs.forEach(o=>{ d[o.id] = blank(); c[o.id] = blankC2(); });
   return {orgs, org:"org_stc", coder:"", cutoff:"2026-09-22", active:0, tab:"coding",
-          data:d, c2:c, final:{}};
+          data:d, c2:c};
 }
 let S = seed();
 try{ const raw = localStorage.getItem(KEY); if(raw){ const p = JSON.parse(raw);
@@ -606,14 +582,12 @@ function normalise(){
   if(!S.orgs.length) S.orgs = DEFAULT_ORGS.map(o=>({...o}));
   S.orgs.forEach(o=>{ if(!S.data[o.id]) S.data[o.id] = blank();
                       if(!S.c2[o.id]) S.c2[o.id] = blankC2();
-                      if(typeof o.group !== "string") o.group = ""; });
+                      });
   if(!S.orgs.some(o=>o.id === S.org)) S.org = S.orgs[0].id;
-  if(!S.final || typeof S.final !== "object") S.final = {};
 }
 normalise();
 function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
 const orgName  = id => (S.orgs.find(o=>o.id === id) || {name:id}).name;
-const orgGroup = id => (S.orgs.find(o=>o.id === id) || {}).group || "";
 const newOrgId = () => "org_" + Math.random().toString(36).slice(2,9);
 
 /* shared-store state */
@@ -622,7 +596,6 @@ let ROSTER = [];                 // [{id}] every coder who has registered
 let PEERS = {};                  // coderId -> {key -> {s,ev,src}}
 let NAMES = {};                  // coderId -> display name
 let COMPARE = null;              // coderId chosen for the kappa comparison
-let SOURCE = "mine";             // which set the dashboard reports: "mine" or "final"
 const subs = [];
 const cellKey = (orgId, dim, face) => `${orgId}__${dim}__${face}`;
 
@@ -637,32 +610,7 @@ function confirmed(f){
 }
 function pending(f){ return f && f.s !== null && f.s !== undefined && !confirmed(f); }
 
-/* The dashboard reports either this coder's own set or the agreed final set. */
-function rowsFor(orgId){
-  if(SOURCE !== "final") return S.data[orgId] || blank();
-  return DIMS.map((_,i)=>({
-    say: S.final[cellKey(orgId,i,"say")] || {s:null, ev:"", src:""},
-    do:  S.final[cellKey(orgId,i,"do")]  || {s:null, ev:"", src:""}
-  }));
-}
-function finalCount(orgId){
-  let n = 0;
-  DIMS.forEach((_,i)=>["say","do"].forEach(f=>{
-    if(confirmed(S.final[cellKey(orgId,i,f)])) n++; }));
-  return n;
-}
-function setFinal(orgId, dim, face, value){
-  const key = cellKey(orgId, dim, face);
-  if(value === null) delete S.final[key]; else S.final[key] = value;
-  save();
-  if(MODE === "shared" && DB){
-    const ref = DB.doc("final/" + key);
-    (value === null ? ref.delete()
-      : ref.set({s:value.s, ev:value.ev, src:value.src,
-                 org:orgName(orgId), dim:dim+1,
-                 face: face==="say"?"Say":"Do", at:Date.now()})).catch(()=>{});
-  }
-}
+function rowsFor(orgId){ return S.data[orgId] || blank(); }
 
 function totals(org){
   const rows = rowsFor(org || S.org);
@@ -683,7 +631,7 @@ function band(g){
   return        {k:"Significant Decoupling",   ar:"انفصال كبير",   c:"b-sig"};
 }
 
-/* quadratically weighted and unweighted Cohen's kappa over 0–3 */
+/* quadratically weighted Cohen's kappa over 0-3 */
 function kappa(a, b, weighted){
   const k=4, N=a.length; if(!N) return null;
   const O = Array.from({length:k},()=>Array(k).fill(0));
@@ -722,20 +670,7 @@ function peerVector(coderId, orgId){
 }
 
 /* ===================== SHARED STORE ===================== */
-function setMode(m){ MODE = m; const el = document.getElementById("modeline");
-  if(el) el.innerHTML = modeHTML(); }
-
-function modeHTML(){
-  if(MODE === "shared")
-    return `<span class="chip ok">● Shared</span> All coders with access work in the same instrument.
-      Each writes only their own cells.
-      <em>مشترك — جميع المُرمِّزين يعملون في الأداة نفسها، وكل مُرمِّز يكتب في خلاياه وحدها.</em>`;
-  if(MODE === "connecting")
-    return `<span class="chip">● Connecting…</span> <em>جارٍ الاتصال…</em>`;
-  return `<span class="chip warn">● This device only</span> The shared store is not available
-    in this view; coding is held in this browser only and is exported at the end of each session.
-    <em>هذا الجهاز فقط — التخزين المشترك غير متاح في هذا العرض، والترميز محفوظ في هذا المتصفح وحده ويُصدَّر في نهاية كل جلسة.</em>`;
-}
+function setMode(m){ MODE = m; }
 
 async function connect(){
   let db = null, user = null;
@@ -761,7 +696,7 @@ async function connect(){
     const d = snap.exists ? snap.data() : null;
     if(d && Array.isArray(d.orgs) && d.orgs.length){
       S.orgs = d.orgs.filter(o=>o && o.id && typeof o.name === "string")
-                     .map(o=>({id:o.id, name:o.name, group: o.group || ""}));
+                     .map(o=>({id:o.id, name:o.name}));
       if(typeof d.cutoff === "string") S.cutoff = d.cutoff;
       normalise();
       const cf = document.getElementById("cutoff"); if(cf) cf.value = S.cutoff;
@@ -770,15 +705,6 @@ async function connect(){
       // first viewer seeds the list from the defaults
       DB.doc("meta/config").set({orgs: S.orgs, cutoff: S.cutoff}).catch(()=>{});
     }
-  }, ()=>{}));
-
-  // the agreed final set, written jointly
-  subs.push(DB.collection("final").onSnapshot(snap=>{
-    const bag = {};
-    snap.docs.forEach(d=>{ const v = d.data() || {};
-      bag[d.id] = {s:(typeof v.s === "number" ? v.s : null),
-                   ev:String(v.ev||""), src:String(v.src||"")}; });
-    S.final = bag; render();
   }, ()=>{}));
 
   // who else is coding
@@ -880,8 +806,6 @@ function renderStrip(){
     `<strong style="color:var(--ink)">${t.nOK} of 18 cells confirmed</strong> for ${esc(orgName(S.org))}` +
     (t.nPend ? ` · <span style="color:var(--warn)">${t.nPend} scored but waiting on evidence</span>` : "") +
     `<em>${t.nOK} من ١٨ خلية مؤكدة${t.nPend?` · ${t.nPend} بدرجة دون دليل — غير محتسبة`:""}</em>`;
-  const ml = document.getElementById("modeline");
-  if(ml) ml.innerHTML = modeHTML();
 }
 
 function renderRail(){
@@ -979,127 +903,35 @@ function renderPanel(){
 function renderResults(){
   const all = S.orgs.map(o=>totals(o.id));
   const live = all.filter(t=>t.nOK > 0);
-  const full = all.filter(t=>t.whole);
   const none = live.length === 0;
+  const empty = `<p class="note">No confirmed cells yet.<em>لا توجد خلايا مؤكدة بعد.</em></p>`;
 
-  const empty = txt => `<p class="note">${txt}
-    <em>لا توجد بيانات كافية بعد.</em></p>`;
-
-  /* ---------- dimension-level gaps, per organization ---------- */
   const dimGap = (orgId, i) => {
     const r = rowsFor(orgId)[i];
     return (confirmed(r.say) && confirmed(r.do)) ? r.say.s - r.do.s : null;
   };
 
-  /* ---------- 1. headline figures ---------- */
-  const meanGap = live.length
-    ? live.reduce((a,t)=>a+t.gapAbs,0)/live.length : null;
-  let widest = null;
-  DIMS.forEach((d,i)=>{
-    const vals = live.map(t=>dimGap(t.org,i)).filter(v=>v!==null);
-    if(!vals.length) return;
-    const m = vals.reduce((a,b)=>a+b,0)/vals.length;
-    if(widest === null || Math.abs(m) > Math.abs(widest.m)) widest = {d, i, m, n:vals.length};
-  });
-  const cellsDone = live.reduce((a,t)=>a+t.nOK,0);
-
-  const nFinal = S.orgs.reduce((a,o)=>a+finalCount(o.id),0);
-  const kpis = `
-  <div class="card" style="padding:14px 20px;margin-bottom:16px">
-    <div class="row" style="margin:0;justify-content:space-between">
-      <div class="field" style="max-width:300px">
-        <label for="source">Figures reported from <span>الأرقام المعروضة من</span></label>
-        <select id="source">
-          <option value="mine"${SOURCE==="mine"?" selected":""}>This coder's own set — ترميز المُرمِّزة الحالية</option>
-          <option value="final"${SOURCE==="final"?" selected":""}>The agreed final set — المجموعة النهائية المتفق عليها</option>
-        </select>
-      </div>
-      <span class="note" style="max-width:420px">${
-        SOURCE === "final"
-        ? `${nFinal} cells have been agreed and recorded as final. Results reported in the study are taken from this set.
-           <em>${nFinal} خلية متفق عليها ومسجلة نهائياً. النتائج المعتمدة في الدراسة تُؤخذ من هذه المجموعة.</em>`
-        : `A single coder's set is a working view. Reconciliation on the Reliability tab produces the agreed set.
-           <em>مجموعة مُرمِّزة واحدة عرض عملي. المطابقة في تبويب الثبات تُنتج المجموعة المتفق عليها.</em>`}</span>
-    </div>
-  </div>
-  <div class="kgrid">
-    <div class="kbox"><div class="k">Organizations coded</div>
-      <div class="v">${live.length}<small style="font-size:14px;color:var(--ink-3)">/${all.length}</small></div>
-      <div class="n">${full.length} complete<em>${live.length} منظمة بدأت · ${full.length} مكتملة</em></div></div>
-    <div class="kbox"><div class="k">Cells confirmed</div>
-      <div class="v">${cellsDone}<small style="font-size:14px;color:var(--ink-3)">/${all.length*18}</small></div>
-      <div class="n">evidence recorded for each<em>خلايا مؤكدة بأدلتها</em></div></div>
-    <div class="kbox"><div class="k">Mean Gap<sub>abs</sub></div>
-      <div class="v">${meanGap===null?"—":f1(meanGap)+"%"}</div>
-      <div class="n">across coded organizations<em>متوسط الفجوة بين المنظمات</em></div></div>
-    <div class="kbox"><div class="k">Widest dimension</div>
-      <div class="v" style="font-size:17px">${widest?("D"+widest.d.n+"  "+(widest.m>0?"+":"")+widest.m.toFixed(1)):"—"}</div>
-      <div class="n">${widest?esc(widest.d.en):"not yet determinable"}<em>${widest?esc(widest.d.ar):"غير محدد بعد"}</em></div></div>
-  </div>`;
-
-  /* ---------- 2. comparison table ---------- */
+  /* --- the table --- */
   const tbl = all.map(t=>{
     const b = band(t.gapAbs);
     const pill = t.whole
       ? `<span class="pill ${b.c}" style="margin:0"><span class="dot"></span>${b.k}</span>
          <div class="ar" style="font-size:11px;color:var(--ink-3)">${b.ar}</div>`
-      : `<span class="pill b-pend" style="margin:0"><span class="dot"></span>${t.nOK}/18 coded</span>
-         <div class="ar" style="font-size:11px;color:var(--ink-3)">غير مكتمل</div>`;
+      : `<span class="pill b-pend" style="margin:0"><span class="dot"></span>${t.nOK}/18</span>`;
     return `<tr${t.org===S.org?' style="background:var(--say-soft)"':''}>
-      <td><strong>${esc(orgName(t.org))}</strong>
-        <div class="ar" style="font-size:11px">${esc(orgGroup(t.org)||"")}</div></td>
+      <td><strong>${esc(orgName(t.org))}</strong></td>
       <td class="num" style="color:var(--say)">${t.nOK?t.say:"·"}</td>
       <td class="num" style="color:var(--do)">${t.nOK?t.do:"·"}</td>
       <td class="num">${t.nOK?f1(t.gapAbs)+"%":"·"}</td>
       <td class="num">${t.say?f1(t.gapRel)+"%":"·"}</td>
-      <td class="num">${t.disp===null?"·":t.disp.toFixed(2)}</td>
       <td>${pill}</td></tr>`;
   }).join("");
 
-  /* ---------- 3. scatter: declaration against practice ---------- */
-  const PX=46, PY=16, PW=300, PH=300;          // plot box inside a 392 x 372 viewBox
-  const sx = v => PX + v/MAX*PW;
-  const sy = v => PY + (1 - v/MAX)*PH;
-  const gridTicks = [0,9,18,27];
-  const scatter = full.length || live.length ? `
-  <svg viewBox="0 0 392 372" style="width:100%;height:auto;max-width:520px"
-       role="img" aria-label="Sigma Say against Sigma Do, with the congruence line">
-    <rect x="${PX}" y="${PY}" width="${PW}" height="${PH}" fill="var(--surface-2)" rx="6"></rect>
-    ${gridTicks.map(v=>`
-      <line x1="${sx(v)}" y1="${PY}" x2="${sx(v)}" y2="${PY+PH}" stroke="var(--line)"
-            stroke-width="1" fill="none"></line>
-      <line x1="${PX}" y1="${sy(v)}" x2="${PX+PW}" y2="${sy(v)}" stroke="var(--line)"
-            stroke-width="1" fill="none"></line>
-      <text x="${sx(v)}" y="${PY+PH+16}" text-anchor="middle" font-size="10"
-            font-family="var(--f-num)" fill="var(--ink-3)">${v}</text>
-      <text x="${PX-8}" y="${sy(v)+3}" text-anchor="end" font-size="10"
-            font-family="var(--f-num)" fill="var(--ink-3)">${v}</text>`).join("")}
-    <line x1="${sx(0)}" y1="${sy(0)}" x2="${sx(MAX)}" y2="${sy(MAX)}"
-          stroke="var(--good)" stroke-width="1.5" stroke-dasharray="5 4" fill="none"></line>
-    <text x="${sx(21)}" y="${sy(21)-7}" font-size="9.5" fill="var(--good)"
-          font-family="var(--f-en)">Say = Do</text>
-    ${live.map(t=>{
-      const x = sx(t.say), y = sy(t.do);
-      const right = x > PX + PW*0.62;
-      const col = t.whole ? "var(--say)" : "var(--ink-3)";
-      return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="6" fill="${col}"
-                 stroke="var(--surface)" stroke-width="2"></circle>
-        <text x="${(right?x-11:x+11).toFixed(1)}" y="${(y+4).toFixed(1)}"
-              text-anchor="${right?"end":"start"}" font-size="11" font-weight="600"
-              font-family="var(--f-en)" fill="var(--ink)">${esc(orgName(t.org))}</text>`;
-    }).join("")}
-    <text x="${PX+PW/2}" y="366" text-anchor="middle" font-size="10.5"
-          font-family="var(--f-en)" fill="var(--say)" font-weight="600">Σ Say  (0–27)</text>
-    <text x="14" y="${PY+PH/2}" text-anchor="middle" font-size="10.5" font-family="var(--f-en)"
-          fill="var(--do)" font-weight="600"
-          transform="rotate(-90 14 ${PY+PH/2})">Σ Do  (0–27)</text>
-  </svg>` : "";
-
-  /* ---------- 4. Say and Do to the same scale ---------- */
+  /* --- Say and Do on the same scale --- */
   const ticks = [9,18].map(v=>`<span class="tick" style="left:${v/MAX*100}%"></span>`).join("");
-  const bars = live.length ? live.map(t=>`
+  const bars = live.map(t=>`
     <div class="brow">
-      <div class="lb">${esc(orgName(t.org))}${t.whole?"":'<i>جزئي</i>'}</div>
+      <div class="lb">${esc(orgName(t.org))}</div>
       <div class="pair">
         <div class="track">${ticks}<b style="width:${t.say/MAX*100}%;background:var(--say)"></b>
           <em>Say ${t.say}</em></div>
@@ -1108,9 +940,9 @@ function renderResults(){
       </div>
     </div>`).join("") + `
     <div class="brow"><div class="lb"></div>
-      <div class="axis"><span>0</span><span>9</span><span>18</span><span>27</span></div></div>` : "";
+      <div class="axis"><span>0</span><span>9</span><span>18</span><span>27</span></div></div>`;
 
-  /* ---------- 5. one small chart per dimension, per organization ---------- */
+  /* --- one small chart per dimension and organization --- */
   const miniBar = g => {
     if(g === null) return `<div class="mt"><span class="zero"></span></div>
       <span class="mv" style="color:var(--ink-3)">·</span>`;
@@ -1123,7 +955,7 @@ function renderResults(){
     return `<div class="mt"><span class="zero"></span>${bar}</div>
       <span class="mv" style="color:${col}">${g>0?"+":""}${g}</span>`;
   };
-  const matrix = live.length ? `
+  const matrix = `
   <div class="scroll"><div class="mx" style="--cols:${live.length}">
     <div class="mh"></div>
     ${live.map(t=>`<div class="mh">${esc(orgName(t.org))}</div>`).join("")}
@@ -1132,164 +964,37 @@ function renderResults(){
       ${live.map(t=>`<div class="mcell">${miniBar(dimGap(t.org,i))}</div>`).join("")}
     `).join("")}
   </div></div>
-  <div class="lgd" style="margin-top:8px">
-    <span><i style="background:var(--do)"></i>right of centre: Say exceeds Do — القول يفوق الفعل</span>
-    <span><i style="background:var(--pos)"></i>left of centre: Do exceeds Say — الفعل يفوق القول</span>
-    <span class="note">each track spans −3 to +3 — كل مسار يمتد من ‎−٣ إلى ‎+٣</span>
-  </div>` : "";
-
-  /* ---------- 6. dimensions ranked by mean gap ---------- */
-  const ranked = DIMS.map((d,i)=>{
-    const vals = live.map(t=>dimGap(t.org,i)).filter(v=>v!==null);
-    return {d, i, n:vals.length,
-            m: vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : null};
-  }).filter(r=>r.m !== null).sort((a,b)=>b.m - a.m);
-  const rank = ranked.length ? ranked.map(r=>{
-    const w = Math.abs(r.m)/3*50;
-    const col = r.m>0?"var(--do)":r.m<0?"var(--pos)":"var(--good)";
-    const bar = Math.abs(r.m) < 0.05
-      ? `<b style="left:calc(50% - 2px);width:4px;background:var(--good)"></b>`
-      : r.m > 0 ? `<b style="left:50%;width:${w}%;background:var(--do)"></b>`
-                : `<b style="right:50%;width:${w}%;background:var(--pos)"></b>`;
-    return `<div class="dv">
-      <div class="lb" style="font-size:12px">D${r.d.n} ${esc(r.d.en)}<i>${esc(r.d.ar)}</i></div>
-      <div class="dvt"><span class="zero"></span>${bar}</div>
-      <div class="dvv" style="color:${col}">${r.m>0?"+":""}${r.m.toFixed(1)}</div></div>`;
-  }).join("") : "";
-
-  /* ---------- 7. group comparison ---------- */
-  const groups = {};
-  live.forEach(t=>{
-    const g = orgGroup(t.org) || "Ungrouped";
-    (groups[g] = groups[g] || []).push(t);
-  });
-  const gkeys = Object.keys(groups);
-  const gstats = gkeys.map(g=>{
-    const ts = groups[g];
-    const mean = f => ts.reduce((a,t)=>a+f(t),0)/ts.length;
-    return {g, n:ts.length, say:mean(t=>t.say), do:mean(t=>t.do),
-            gap:mean(t=>t.gapAbs), disp:mean(t=>t.disp===null?0:t.disp),
-            names: ts.map(t=>orgName(t.org))};
-  });
-  const groupBlock = gkeys.length >= 2 ? `
-    <div class="scroll"><table>
-      <tr><th>Group <div class="ar">المجموعة</div></th>
-          <th>Organizations <div class="ar">المنظمات</div></th>
-          <th style="color:var(--say)">Mean Σ Say</th><th style="color:var(--do)">Mean Σ Do</th>
-          <th>Mean Gap<sub>abs</sub></th><th>Mean disp. <div class="ar">التشتت</div></th></tr>
-      ${gstats.map(s=>`<tr><td><strong>${esc(s.g)}</strong></td>
-        <td style="font-size:11.5px">${esc(s.names.join(", "))}</td>
-        <td class="num">${s.say.toFixed(1)}</td><td class="num">${s.do.toFixed(1)}</td>
-        <td class="num">${f1(s.gap)}%</td><td class="num">${s.disp.toFixed(2)}</td></tr>`).join("")}
-    </table></div>
-    <div class="chart" style="margin-top:16px">
-      ${gstats.map(s=>`<div class="brow">
-        <div class="lb">${esc(s.g)}<i>${s.n} ${s.n===1?"منظمة":"منظمات"}</i></div>
-        <div class="pair">
-          <div class="track">${ticks}<b style="width:${s.say/MAX*100}%;background:var(--say)"></b>
-            <em>Say ${s.say.toFixed(1)}</em></div>
-          <div class="track">${ticks}<b style="width:${s.do/MAX*100}%;background:var(--do)"></b>
-            <em>Do ${s.do.toFixed(1)}</em></div></div></div>`).join("")}
-      <div class="brow"><div class="lb"></div>
-        <div class="axis"><span>0</span><span>9</span><span>18</span><span>27</span></div></div>
-    </div>
-    <p class="note" style="margin-top:12px">A small number of organizations per group is a comparison, not a statistical test: it describes the cases coded and supports no general claim about the populations they are drawn from.
-      <em>عدد صغير من المنظمات في كل مجموعة مقارنة لا اختبار إحصائي: يصف الحالات المُرمَّزة ولا يسند ادعاءً عاماً عن المجتمعات المأخوذة منها.</em></p>`
-    : `<p class="note">Group comparison appears once at least two groups are defined. Groups are assigned beside each organization's name on the Export tab — a sector, a jurisdiction, a role.
-        <em>تظهر مقارنة المجموعات عند تعريف مجموعتين على الأقل. وتُسنَد المجموعات بجانب اسم كل منظمة في تبويب التصدير — قطاع أو ولاية قضائية أو دور.</em></p>`;
-
-  /* ---------- 8. the selected organization, dimension by dimension ---------- */
-  const rows = S.data[S.org];
-  const dv = DIMS.map((d,i)=>{
-    const r = rows[i];
-    if(!(confirmed(r.say) && confirmed(r.do)))
-      return `<div class="dv"><div class="lb" style="font-size:12px">D${d.n} ${esc(d.en)}
-        <i>${esc(d.ar)}</i></div><div class="dvt"><span class="zero"></span></div>
-        <div class="dvv" style="color:var(--ink-3)">·</div></div>`;
-    const g = r.say.s - r.do.s, w = Math.abs(g)/3*50;
-    const col = g>0 ? "var(--do)" : g<0 ? "var(--pos)" : "var(--good)";
-    const bar = g === 0
-      ? `<b style="left:calc(50% - 2px);width:4px;background:var(--good)"></b>`
-      : g > 0 ? `<b style="left:50%;width:${w}%;background:var(--do)"></b>`
-              : `<b style="right:50%;width:${w}%;background:var(--pos)"></b>`;
-    return `<div class="dv">
-      <div class="lb" style="font-size:12px">D${d.n} ${esc(d.en)}<i>${esc(d.ar)}</i></div>
-      <div class="dvt"><span class="zero"></span>${bar}</div>
-      <div class="dvv" style="color:${col}">${g>0?"+":""}${g}</div></div>`;
-  }).join("");
-  const t = totals();
+  <div class="lgd" style="margin-top:10px">
+    <span><i style="background:var(--do)"></i>Say exceeds Do — القول يفوق الفعل</span>
+    <span><i style="background:var(--pos)"></i>Do exceeds Say — الفعل يفوق القول</span>
+  </div>`;
 
   document.getElementById("t-results").innerHTML = `
-  ${kpis}
-
   <div class="card">
-    <h3>All organizations</h3>
-    <div class="arh">جميع المنظمات — المجاميع والفجوة والنطاق</div>
-    <p>Σ Say and Σ Do are shown beside the index, never after it. Two organizations can share an identical gap of 0.0% while one scores 26 and 26 and the other 10 and 10: the index measures correspondence, not maturity, and the totals are what tell them apart.</p>
-    <p class="ar">مجموع القول ومجموع الفعل يُعرضان بجانب المؤشر لا بعده. منظمتان قد تتشاركان فجوة ٠٫٠٪ بينما إحداهما ٢٦ و٢٦ والأخرى ١٠ و١٠: المؤشر يقيس التوافق لا النضج، والمجاميع هي ما يميزهما.</p>
+    <h3>Results</h3>
+    <div class="arh">النتائج لكل منظمة</div>
     <div class="scroll"><table>
       <tr><th>Organization <div class="ar">المنظمة</div></th>
           <th style="color:var(--say)">Σ Say</th><th style="color:var(--do)">Σ Do</th>
           <th>Gap<sub>abs</sub></th><th>Gap<sub>rel</sub></th>
-          <th>Disp. <div class="ar">التشتت</div></th>
           <th>Band <div class="ar">النطاق</div></th></tr>
       ${tbl}</table></div>
-    <p class="note" style="margin-top:11px">Dispersion is the mean absolute dimension-level gap. A low index with high dispersion means the gaps cancel out rather than being absent.
-      <em>التشتت هو متوسط الفجوة المطلقة على مستوى الأبعاد. مؤشر منخفض مع تشتت مرتفع يعني أن الفجوات تلاشت بالتقابل لا أنها غائبة.</em></p>
-  </div>
-
-  <div class="card">
-    <h3>Maturity and congruence together</h3>
-    <div class="arh">النضج والاتساق في صورة واحدة</div>
-    <p>Each organization sits at its declaration on one axis and its practice on the other. The dashed line is perfect correspondence: a point above it practises more than it declares, a point below declares more than it practises, and distance from the origin is how much either face contains at all. This is the one view the index alone cannot give.</p>
-    <p class="ar">كل منظمة تقع عند إعلانها على محور وممارستها على الآخر. الخط المتقطع هو التوافق التام: النقطة فوقه تمارس أكثر مما تعلن، وتحته تعلن أكثر مما تمارس، والبُعد عن نقطة الأصل هو مقدار ما يحمله كل وجه أصلاً. وهذه الصورة وحدها ما لا يعطيه المؤشر.</p>
-    ${none ? empty("No organization has confirmed cells yet.") : scatter}
   </div>
 
   <div class="card">
     <h3>Declaration against practice</h3>
-    <div class="arh">القول مقابل الفعل — كلاهما على مقياس الـ٢٧ نفسه</div>
+    <div class="arh">القول والفعل على المقياس نفسه</div>
     <div class="lgd">
       <span><i style="background:var(--say)"></i>Σ Say — القول</span>
       <span><i style="background:var(--do)"></i>Σ Do — الفعل</span>
     </div>
-    ${none ? empty("Nothing to plot yet.") : `<div class="chart">${bars}</div>`}
+    ${none ? empty : `<div class="chart">${bars}</div>`}
   </div>
 
   <div class="card">
-    <h3>Every dimension, every organization</h3>
-    <div class="arh">كل بُعد في كل منظمة</div>
-    <p>One small chart per dimension and organization, all drawn to the same scale of three points either side of zero. A bar to the right means the declaration runs ahead of the practice; a bar to the left means the practice runs ahead of the declaration. Reading across a row shows whether a dimension is a shortfall everywhere or only in one case.</p>
-    <p class="ar">مخطط مصغّر لكل بُعد في كل منظمة، جميعها على المقياس نفسه: ثلاث نقاط على كل جانب من الصفر. الشريط إلى اليمين يعني أن الإعلان يسبق الممارسة، وإلى اليسار أن الممارسة تسبق الإعلان. والقراءة أفقياً تكشف هل البُعد قصور عام أم حالة منفردة.</p>
-    ${none ? empty("Charts appear as cells are confirmed.") : matrix}
-  </div>
-
-  <div class="card">
-    <h3>Dimensions ranked by mean gap</h3>
-    <div class="arh">الأبعاد مرتبة بمتوسط الفجوة</div>
-    <p>The average dimension-level gap across every organization coded so far, widest declaration-led shortfall at the top. It answers where practice lags declaration most across the sample as a whole, rather than within any one organization.</p>
-    <p class="ar">متوسط فجوة البُعد عبر كل المنظمات المُرمَّزة حتى الآن، وأوسع قصور يقوده الإعلان في الأعلى. يجيب عن موضع تخلّف الممارسة عن الإعلان على مستوى العيّنة ككل لا داخل منظمة بعينها.</p>
-    <div class="lgd">
-      <span><i style="background:var(--do)"></i>Say exceeds Do — القول يفوق الفعل</span>
-      <span><i style="background:var(--pos)"></i>Do exceeds Say — الفعل يفوق القول</span>
-    </div>
-    ${ranked.length ? `<div class="chart">${rank}</div>` : empty("No dimension has both faces confirmed in any organization yet.")}
-  </div>
-
-  <div class="card">
-    <h3>Group comparison</h3>
-    <div class="arh">مقارنة المجموعات</div>
-    ${groupBlock}
-  </div>
-
-  <div class="card">
-    <h3>Where the gap sits — ${esc(orgName(S.org))}</h3>
-    <div class="arh">موضع الفجوة داخل الأبعاد التسعة — ${esc(orgName(S.org))}</div>
-    <p>Each bar is one dimension's Say minus Do for the selected organization. The organization-level index hides this: a +3 on one dimension and a −3 on another read as no gap at all.</p>
-    <p class="ar">كل شريط هو قول البُعد ناقص فعله للمنظمة المختارة. مؤشر المنظمة يحجب هذا: ‎+٣ في بُعد و‎−٣ في آخر يُقرآن كأن لا فجوة.</p>
-    <div class="chart">${dv}</div>
-    <p class="note">${t.dN} of 9 dimensions have both faces confirmed.
-      <em>${t.dN} من ٩ أبعاد مؤكدة الوجهين.</em></p>
+    <h3>Gap by dimension</h3>
+    <div class="arh">الفجوة داخل كل بُعد</div>
+    ${none ? empty : matrix}
   </div>`;
 }
 
@@ -1335,99 +1040,22 @@ function renderRel(){
               `<option value="${esc(id)}"${id===COMPARE?" selected":""}>${esc(coderLabel(id))}</option>`
             ).join("")}</select></div>`
        : `<p class="note" style="margin-bottom:14px">No second coder has registered on this instrument yet. A second coder's scores appear here once coding begins.
-            <em>لم يُسجَّل مُرمِّز ثانٍ على هذه الأداة بعد. وتظهر درجاته هنا حال بدء الترميز.</em></p>`)
+            <em>لا يوجد مُرمِّز ثانٍ بعد.</em></p>`)
     : `<p class="note" style="margin-bottom:14px">The second coder's scores are entered by hand in this view. In a shared view they arrive on their own.
-         <em>تُدخَل درجات المُرمِّز الثاني يدوياً في هذا العرض. وفي العرض المشترك تصل تلقائياً.</em></p>`;
-
-  /* ---------- reconciliation: the agreed final set ---------- */
-  const mineRows = S.data[S.org] || blank();
-  const cellsList = [];
-  DIMS.forEach((d,i)=>["say","do"].forEach(face=>{
-    const idx = face === "say" ? i : i+9;
-    cellsList.push({d, i, face, idx, a: mine[idx], b: theirs[idx],
-                    fin: S.final[cellKey(S.org,i,face)] || null});
-  }));
-  const comparable = cellsList.filter(c=>c.a !== null && c.a !== undefined &&
-                                         c.b !== null && c.b !== undefined);
-  const agreeing = comparable.filter(c=>c.a === c.b);
-  const differing = comparable.filter(c=>c.a !== c.b);
-  const settled = cellsList.filter(c=>confirmed(c.fin)).length;
-
-  const reconRow = c => {
-    const f = c.fin;
-    const peerCell = shared && COMPARE
-      ? (PEERS[COMPARE]||{})[cellKey(S.org,c.i,c.face)] : null;
-    return `<tr>
-      <td><strong>D${c.d.n} ${c.face==="say"?"Say":"Do"}</strong>
-        <div class="ar">${esc(c.d.ar)}</div></td>
-      <td class="num">${c.a===null||c.a===undefined?"·":c.a}</td>
-      <td class="num">${c.b===null||c.b===undefined?"·":c.b}</td>
-      <td style="white-space:nowrap">
-        <input type="number" min="0" max="3" step="1" data-fin="${c.i}:${c.face}"
-          value="${f && f.s !== null && f.s !== undefined ? f.s : ""}"
-          style="width:54px;text-align:center">
-        <button class="btn" style="padding:5px 9px;font-size:11px"
-          data-adopt="${c.i}:${c.face}:a">Take left</button>
-        ${peerCell ? `<button class="btn" style="padding:5px 9px;font-size:11px"
-          data-adopt="${c.i}:${c.face}:b">Take right</button>` : ""}
-      </td>
-      <td><input type="text" data-finnote="${c.i}:${c.face}"
-        value="${f ? esc(f.ev) : ""}" placeholder="Reason for the agreed score — سبب الدرجة المتفق عليها"></td>
-      <td class="num">${confirmed(f) ? '<span style="color:var(--good)">✓</span>'
-                                     : '<span style="color:var(--ink-3)">—</span>'}</td>
-    </tr>`;
-  };
-
-  const recon = `
-  <div class="card">
-    <h3>Reconciliation — the agreed final set</h3>
-    <div class="arh">المطابقة — المجموعة النهائية المتفق عليها</div>
-    <p>Reliability testing establishes that two coders apply the instrument consistently. It does not by itself produce the scores a study reports. Those come from this table: cells on which both coders agree can be adopted in one step, and cells on which they differ are settled one at a time with the reason recorded. The agreed set is what the Dashboard reports when its source is set to the final set.</p>
-    <p class="ar">اختبار الثبات يُثبت أن مُرمِّزَين يطبّقان الأداة باتساق، ولا يُنتج بذاته الدرجات التي تعتمدها الدراسة. تلك تأتي من هذا الجدول: الخلايا المتفق عليها تُعتمد دفعة واحدة، والخلايا المختلف فيها تُحسم واحدة واحدة مع تسجيل السبب. والمجموعة المتفق عليها هي ما تعرضه لوحة التحليل عند اختيار المجموعة النهائية مصدراً.</p>
-    <div class="kgrid">
-      <div class="kbox"><div class="k">Agreeing cells</div><div class="v">${agreeing.length}</div>
-        <div class="n">adoptable in one step<em>قابلة للاعتماد دفعة واحدة</em></div></div>
-      <div class="kbox"><div class="k">Differing cells</div>
-        <div class="v" style="color:${differing.length?"var(--warn)":"var(--good)"}">${differing.length}</div>
-        <div class="n">each settled with a reason<em>تُحسم كل منها بسبب مسجل</em></div></div>
-      <div class="kbox"><div class="k">Settled</div><div class="v">${settled}<small style="font-size:14px;color:var(--ink-3)">/18</small></div>
-        <div class="n">recorded as final<em>مسجلة نهائياً</em></div></div>
-    </div>
-    <div class="row">
-      <button class="btn primary" id="adoptagree" ${agreeing.length?"":"disabled"}>
-        Adopt the ${agreeing.length} agreeing cells — اعتماد الخلايا المتفق عليها</button>
-      <span class="note" id="adoptmsg"></span>
-    </div>
-    <div class="scroll"><table>
-      <tr><th>Cell <div class="ar">الخلية</div></th>
-          <th>Left <div class="ar">يسار</div></th><th>Right <div class="ar">يمين</div></th>
-          <th>Agreed <div class="ar">المتفق عليه</div></th>
-          <th>Reason <div class="ar">السبب</div></th><th>Final</th></tr>
-      ${(differing.concat(agreeing)).map(reconRow).join("")
-        || `<tr><td colspan="6" class="note">No cell has been confirmed by both sets yet.</td></tr>`}
-    </table></div>
-  </div>`;
+         <em>أدخل درجات المُرمِّز الثاني يدوياً.</em></p>`;
 
   document.getElementById("t-rel").innerHTML = `
   <div class="card">
     <h3>Inter-coder reliability — ${esc(orgName(S.org))}</h3>
-    <div class="arh">ثبات الترميز بين المُرمِّزَين — حدّ القبول κ ≥ ٠٫٧٠ — ${esc(orgName(S.org))}</div>
-    <p>The protocol specifies quadratically weighted Cohen's κ, because the scale is ordinal: a disagreement of one level is a smaller failure than a disagreement of three. The unweighted figure is shown beside it so the two can be reported together. κ is computed over the 18 cells of the selected organization, on the cells both coders have confirmed.</p>
-    <p class="ar">يحدد البروتوكول معامل كابا الموزون تربيعياً، لأن المقياس ترتيبي: الاختلاف بمستوى واحد أخف من الاختلاف بثلاثة. والقيمة غير الموزونة معروضة بجانبه ليُذكرا معاً. يُحسب المعامل على الخلايا التي أكّدها المُرمِّزان معاً.</p>
+    <div class="arh">اتفاق المُرمِّزَين — المطلوب κ ≥ ٠٫٧٠ — ${esc(orgName(S.org))}</div>
     ${picker}
     <div class="kgrid">
-      <div class="kbox"><div class="k">κ weighted</div>
+      <div class="kbox"><div class="k">κ</div>
         <div class="v" style="color:${pass?"var(--good)":"var(--bad)"}">${kw===null?"—":kw.toFixed(3)}</div>
-        <div class="n">${esc(lab[0])} (Landis &amp; Koch, 1977)<em>${esc(lab[1])}</em></div></div>
-      <div class="kbox"><div class="k">κ unweighted</div><div class="v">${ku===null?"—":ku.toFixed(3)}</div>
-        <div class="n">Reported alongside<em>يُذكر بجانبه</em></div></div>
-      <div class="kbox"><div class="k">Cells compared</div>
-        <div class="v">${pairs.length}<small style="font-size:14px;color:var(--ink-3)">/18</small></div>
-        <div class="n">${exact} in exact agreement<em>${exact} باتفاق تام</em></div></div>
+        <div class="n">${esc(lab[0])}<em>${esc(lab[1])}</em></div></div>
       <div class="kbox"><div class="k">Threshold ≥ 0.70</div>
         <div class="v" style="color:${pass?"var(--good)":"var(--bad)"}">${kw===null?"—":(pass?"Met":"Not met")}</div>
-        <div class="n">${pass?"Proceed to full coding":"Reconcile, revise the criteria, recode"}
-        <em>${pass?"يمكن المضي في الترميز الكامل":"طابقوا، نقّحوا المعايير، ثم أعيدوا الترميز"}</em></div></div>
+        <div class="n">${exact} of ${pairs.length} cells agree<em>${exact} من ${pairs.length} متطابقة</em></div></div>
     </div>
     <div class="scroll"><table>
       <tr><th>Cell <div class="ar">الخلية</div></th>
@@ -1435,10 +1063,9 @@ function renderRel(){
           <th>${shared&&COMPARE?esc(coderLabel(COMPARE)):"Coder 2"} <div class="ar">المُرمِّز الثاني</div></th>
           <th>Δ</th></tr>
       ${rowsHTML}</table></div>
-    <p class="note" style="margin-top:12px">A second coder who has seen the first coder's sheet is not independent, and the κ computed from it does not measure what it is taken to measure. In the shared view neither coder can read the other's evidence while coding, and neither can overwrite the other's cells.
-      <em>المُرمِّزة الثانية التي اطّلعت على ورقة الأولى ليست مستقلة، والمعامل المحسوب منها لا يقيس ما يُفترض أن يقيسه. وفي العرض المشترك لا تُقرأ أدلة مُرمِّزة أثناء ترميز الأخرى، ولا يمكن الكتابة فوق خلاياها.</em></p>
-  </div>
-  ${recon}`;
+    <p class="note" style="margin-top:12px;color:var(--warn)">Record κ before changing any score.
+      <em>سجّل κ قبل تعديل أي درجة.</em></p>
+  </div>`;
 }
 
 function renderRef(){
@@ -1459,24 +1086,22 @@ function renderRef(){
 
   document.getElementById("t-ref").innerHTML = `
   <div class="card">
-    <h3>The index</h3><div class="arh">المؤشر</div>
+    <h3>The index</h3><div class="arh">كيف يُحسب المؤشر</div>
     <p>The denominator is 27 because nine dimensions are each scored 0–3 on one face: 9 × 3 = 27 is the maximum a single face can reach. The absolute gap expresses the shortfall as a share of that ceiling; the relative gap expresses it as a share of what was actually declared.</p>
-    <p class="ar">المقام ٢٧ لأن تسعة أبعاد يُرمَّز كل منها من ٠ إلى ٣ على وجه واحد: ٩ × ٣ = ٢٧ هو أقصى ما يبلغه وجه واحد. الفجوة المطلقة تعبّر عن القصور كنسبة من هذا السقف، والفجوة النسبية كنسبة مما أُعلن فعلاً.</p>
     <div class="formula">Gap<sub>abs</sub> = (Σ Say − Σ Do) ÷ 27 × 100</div>
     <div class="formula">Gap<sub>rel</sub> = (Σ Say − Σ Do) ÷ Σ Say × 100</div>
     <div class="formula">Dispersion = mean( | Say<sub>d</sub> − Do<sub>d</sub> | ) over d = 1…9</div>
     <p class="note">An index computed on totals cannot distinguish congruence at high maturity from congruence at zero: an organization scoring 26 and 26 and one scoring 10 and 10 both read 0.0%. Σ Say and Σ Do are therefore always reported beside the index, never after it.
-      <em>المؤشر المحسوب على المجاميع لا يميز الاتساق عند النضج العالي من الاتساق عند الصفر: منظمة بـ٢٦ و٢٦ وأخرى بـ١٠ و١٠ كلتاهما تقرأ ٠٫٠٪. لذلك يُذكر مجموع القول ومجموع الفعل دائماً بجانب المؤشر لا بعده.</em></p>
+      <em>منظمة بـ٢٦/٢٦ وأخرى بـ١٠/١٠ كلتاهما ٠٫٠٪ — لذلك يُذكر المجموعان دائماً.</em></p>
   </div>
   <div class="card">
-    <h3>Interpretation bands</h3><div class="arh">نطاقات التفسير</div>
+    <h3>Interpretation bands</h3><div class="arh">ماذا تعني كل نسبة</div>
     <div class="scroll"><table><tr><th>Gap<sub>abs</sub></th><th>Band <div class="ar">النطاق</div></th>
       <th>Reading <div class="ar">القراءة</div></th></tr>${bands}</table></div>
   </div>
   <div class="card">
-    <h3>The general scale</h3><div class="arh">المقياس العام — ينطبق على الأبعاد التسعة جميعاً</div>
+    <h3>The general scale</h3><div class="arh">المقياس العام لكل الأبعاد</div>
     <p>This scale defines what each level means irrespective of dimension. The dimension-specific criteria that a coder actually applies are shown on the Coding tab, under each dimension.</p>
-    <p class="ar">يحدد هذا المقياس معنى كل مستوى بصرف النظر عن البُعد. أما المعايير الخاصة بكل بُعد — وهي ما يطبّقه المُرمِّز فعلاً — فتظهر في تبويب الترميز تحت كل بُعد.</p>
     <div class="scroll"><table>
       <tr><th>Score <div class="ar">الدرجة</div></th>
           <th style="color:var(--say)">Say — declaration <div class="ar">القول — الإعلان</div></th>
@@ -1484,7 +1109,7 @@ function renderRef(){
       ${gen}</table></div>
   </div>
   <div class="card">
-    <h3>Coding rules</h3><div class="arh">قواعد الترميز</div>
+    <h3>Coding rules</h3><div class="arh">قواعد الترميز الأربع</div>
     <div class="scroll"><table><tr><th>#</th><th>Rule <div class="ar">القاعدة</div></th></tr>${rules}</table></div>
   </div>`;
 }
@@ -1523,41 +1148,15 @@ function renderExp(){
     const t = totals(o.id);
     return `<div class="orgrow">
       <input type="text" data-orgname="${i}" value="${esc(o.name)}">
-      <input type="text" data-orggroup="${i}" value="${esc(o.group||"")}"
-        placeholder="Group — المجموعة" style="flex:0 1 150px">
       <span class="note" style="width:60px;flex:none">${t.nOK}/18</span>
       <button class="del" data-orgdel="${i}" title="Remove"
         ${S.orgs.length<2?"disabled":""}>✕</button></div>`;
   }).join("");
 
-  const roster = MODE === "shared"
-    ? `<div class="card">
-        <h3>Coders on this instrument</h3>
-        <div class="arh">المُرمِّزات على هذه الأداة</div>
-        <p>Every coder registered on this instrument is listed here. Each writes only their own cells; no coder can alter another's, and κ on the Reliability tab is computed from two independent sets.</p>
-        <p class="ar">يُدرج هنا كل مُرمِّز سُجِّل على هذه الأداة. كل مُرمِّز يكتب في خلاياه وحدها، ولا يمكن لأحد تعديل خلايا غيره، ومعامل كابا يُحسب من مجموعتين مستقلتين.</p>
-        <div class="scroll"><table>
-          <tr><th>Coder <div class="ar">المُرمِّزة</div></th>
-              <th>Cells confirmed on ${esc(orgName(S.org))} <div class="ar">خلايا مؤكدة</div></th></tr>
-          ${ROSTER.map(id=>{
-            const v = id === ME ? myVector(S.org) : peerVector(id, S.org);
-            const n = v.filter(x=>x !== null && x !== undefined).length;
-            return `<tr><td><strong>${esc(coderLabel(id))}</strong></td>
-                    <td class="num">${n}/18</td></tr>`;
-          }).join("") || `<tr><td colspan="2" class="note">Nobody yet.</td></tr>`}
-        </table></div>
-      </div>`
-    : "";
-
   document.getElementById("t-exp").innerHTML = `
-  ${roster}
   <div class="card">
     <h3>Organizations</h3>
-    <div class="arh">المنظمات — أضيفي أي منظمة، لا الأربع فقط</div>
-    <p>The instrument is not tied to the four organizations of this study. The nine dimensions, the criteria and the index apply to any organization that publishes documents, so a fifth or a fiftieth can be added here. Renaming an organization keeps its coding; removing one deletes it. In a shared view the list is common to every coder.</p>
-    <p>The group beside each name drives the group comparison on the Dashboard — a sector, a jurisdiction, a role. An organization left without a group is reported as ungrouped.</p>
-    <p class="ar">المجموعة بجانب كل اسم تُغذّي مقارنة المجموعات في لوحة التحليل — قطاع أو ولاية قضائية أو دور. والمنظمة بلا مجموعة تُدرج ضمن «غير مُصنّفة».</p>
-    <p class="ar">الأداة غير مرتبطة بالمنظمات الأربع في هذه الدراسة. الأبعاد التسعة والمعايير والمؤشر تنطبق على أي منظمة تنشر وثائق، فيمكن إضافة منظمة خامسة أو خمسين. إعادة التسمية تحفظ الترميز، والحذف يزيله. وفي العرض المشترك تكون القائمة مشتركة بين الجميع.</p>
+    <div class="arh">أضف أي منظمة، لا الأربع فقط</div>
     <div class="orglist">${rows}</div>
     <div class="row">
       <input type="text" id="neworg" placeholder="Organization name — اسم المنظمة" style="max-width:260px">
@@ -1566,9 +1165,7 @@ function renderExp(){
     </div>
   </div>
   <div class="card">
-    <h3>Coding log</h3><div class="arh">سجل الترميز — للنسخ واللصق في جدول بيانات أو في ملحق الدراسة</div>
-    <p>Tab-separated: one row per cell, eighteen rows per organization, followed by a summary row for each. Pasting it into a spreadsheet or a document fills the columns directly.</p>
-    <p class="ar">مفصول بعلامات جدولة: صف لكل خلية، ثمانية عشر صفاً لكل منظمة، ثم صف خلاصة لكل منها. ولصقه في جدول بيانات أو مستند يملأ الأعمدة مباشرة.</p>
+    <h3>Coding log</h3><div class="arh">انسخه والصقه في إكسل</div>
     <div class="row">
       <button class="btn primary" id="copylog">Copy — ${esc(orgName(S.org))}</button>
       <button class="btn" id="copyall">Copy all organizations — نسخ الكل</button>
@@ -1577,18 +1174,7 @@ function renderExp(){
     <textarea class="out" id="logbox" readonly></textarea>
   </div>
   <div class="card">
-    <h3>Worked example</h3><div class="arh">مثال محلول</div>
-    <p>Loads a worked pilot coding, evidence and sources included, into the selected organization. It demonstrates a completed instrument and overwrites any existing coding for that organization.</p>
-    <p class="ar">يُحمِّل ترميزاً تجريبياً محلولاً بأدلته ومصادره في المنظمة المختارة. يوضّح شكل الأداة مكتملة، ويستبدل أي ترميز قائم لتلك المنظمة.</p>
-    <div class="row">
-      <button class="btn" id="loadpilot">Load the pilot example into ${esc(orgName(S.org))}</button>
-      <span class="note" id="pilotmsg"></span>
-    </div>
-  </div>
-  <div class="card">
-    <h3>Reset</h3><div class="arh">إعادة الضبط</div>
-    <p>Clearing erases this coder's scores and evidence for every organization. Other coders' cells are unaffected. The log is exported first.</p>
-    <p class="ar">المسح يحذف درجات هذا المُرمِّز وأدلته لكل المنظمات. ولا تتأثر خلايا المُرمِّزين الآخرين. ويُصدَّر السجل أولاً.</p>
+    <h3>Reset</h3><div class="arh">مسح كل الترميز</div>
     <div class="row">
       <button class="btn" id="clear">Clear this coder's data — مسح بيانات هذا المُرمِّز</button>
       <span class="note" id="clearmsg"></span>
@@ -1645,52 +1231,13 @@ document.addEventListener("click", e=>{
     try{ navigator.clipboard.writeText(txt).then(done, fallback); }catch(err){ fallback(); }
     return;
   }
-  if(e.target.id === "loadpilot"){
-    PILOT.forEach((p,i)=>{
-      S.data[S.org][i] = {say:{s:p[0],ev:p[1],src:p[2]}, do:{s:p[3],ev:p[4],src:p[5]}};
-      pushCell(S.org,i,"say"); pushCell(S.org,i,"do");
-    });
-    S.tab = "coding"; S.active = 0; render(); return;
-  }
-  const ad = e.target.closest("[data-adopt]");
-  if(ad){
-    const [i, face, which] = ad.dataset.adopt.split(":");
-    const own = (S.data[S.org]||blank())[+i][face];
-    const peer = (MODE === "shared" && COMPARE)
-      ? (PEERS[COMPARE]||{})[cellKey(S.org,+i,face)] : null;
-    const src = which === "a" ? own : (peer || own);
-    if(src && src.s !== null && src.s !== undefined)
-      setFinal(S.org, +i, face, {s:src.s, ev:src.ev, src:src.src});
-    renderRel(); return;
-  }
-  if(e.target.id === "adoptagree" && !e.target.disabled){
-    const peerBag = (MODE === "shared" && COMPARE) ? (PEERS[COMPARE]||{}) : null;
-    let n = 0;
-    DIMS.forEach((d,i)=>["say","do"].forEach(face=>{
-      const own = (S.data[S.org]||blank())[i][face];
-      const key = cellKey(S.org,i,face);
-      const other = peerBag ? peerBag[key]
-        : (()=>{ const idx = face==="say"?i:i+9;
-                 const v = (S.c2[S.org]||blankC2())[idx];
-                 return v === null || v === undefined ? null : {s:v, ev:"", src:""}; })();
-      if(!other || other.s === null || other.s === undefined) return;
-      if(own.s !== other.s) return;
-      setFinal(S.org, i, face, {s:own.s, ev:own.ev || "Agreed by both coders.",
-                                src:own.src});
-      n++;
-    }));
-    renderRel();
-    const m = document.getElementById("adoptmsg");
-    if(m) m.textContent = n + " cells recorded as final — سُجّلت نهائياً";
-    return;
-  }
   if(e.target.id === "addorg"){
     const inp = document.getElementById("neworg"), msg = document.getElementById("orgmsg");
     const name = inp.value.trim();
     if(!name){ msg.textContent = "A name is required — الاسم مطلوب"; return; }
     if(S.orgs.some(o=>o.name === name)){ msg.textContent = "Already in the list — موجودة"; return; }
     const id = newOrgId();
-    S.orgs.push({id, name, group:""}); S.data[id] = blank(); S.c2[id] = blankC2();
+    S.orgs.push({id, name}); S.data[id] = blank(); S.c2[id] = blankC2();
     S.org = id; S.active = 0; S.tab = "coding"; pushConfig(); render(); return;
   }
   const del = e.target.closest("[data-orgdel]");
@@ -1729,33 +1276,6 @@ document.addEventListener("change", e=>{
     render(); return;
   }
   if(e.target.id === "cmp"){ COMPARE = e.target.value; renderRel(); return; }
-  if(e.target.id === "source"){ SOURCE = e.target.value; render(); return; }
-  if(e.target.dataset.fin !== undefined){
-    const [i, face] = e.target.dataset.fin.split(":");
-    const key = cellKey(S.org, +i, face);
-    const cur = S.final[key] || {s:null, ev:"", src:""};
-    const v = e.target.value === "" ? null
-            : Math.max(0, Math.min(3, Math.round(+e.target.value)));
-    if(v === null){ setFinal(S.org, +i, face, null); }
-    else {
-      const own = (S.data[S.org]||blank())[+i][face];
-      setFinal(S.org, +i, face, {s:v,
-        ev: cur.ev || own.ev || "Agreed by both coders.",
-        src: cur.src || own.src || (v > 0 ? "see coder records" : "")});
-    }
-    renderRel(); return;
-  }
-  if(e.target.dataset.finnote !== undefined){
-    const [i, face] = e.target.dataset.finnote.split(":");
-    const key = cellKey(S.org, +i, face);
-    const cur = S.final[key];
-    if(cur){ setFinal(S.org, +i, face, {...cur, ev: e.target.value}); }
-    return;
-  }
-  if(e.target.dataset.orggroup !== undefined){
-    const o = S.orgs[+e.target.dataset.orggroup];
-    o.group = e.target.value.trim(); pushConfig(); save(); return;
-  }
   if(e.target.dataset.orgname !== undefined){
     const i = +e.target.dataset.orgname, o = S.orgs[i], name = e.target.value.trim();
     const msg = document.getElementById("orgmsg");
