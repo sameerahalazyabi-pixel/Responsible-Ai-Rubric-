@@ -225,6 +225,17 @@ td.num{font-family:var(--f-num);font-variant-numeric:tabular-nums;text-align:cen
 .b-say{background:var(--say-soft);color:var(--say)}
 .btn.mini{padding:4px 10px;font-size:11px;margin-inline-start:auto}
 details summary::-webkit-details-marker{color:var(--ink-3)}
+.airow{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:14px;
+        padding-top:14px;border-top:1px solid var(--line-soft)}
+.airow .btn.mini{margin-inline-start:0}
+.aibox{margin-top:12px;border:1px solid var(--line);border-radius:10px;padding:14px;
+       background:var(--surface-2)}
+.aigrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
+.aicell{background:var(--surface);border:1px solid var(--line-soft);border-radius:9px;padding:11px 13px}
+.aicell .k{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+.aicell .v{font-family:var(--f-num);font-size:26px;font-weight:600;line-height:1.1;margin:2px 0 3px}
+.aicell .n{font-size:11.5px;color:var(--ink-2);line-height:1.5}
+.aicell .n em{font-family:var(--f-en);font-style:italic;display:block;margin-top:3px;color:var(--ink)}
 .out{width:100%;min-height:220px;font-family:var(--f-num);font-size:11px;line-height:1.6;white-space:pre}
 .bad-row{background:var(--bad-soft)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
@@ -1048,6 +1059,8 @@ document.addEventListener("click", e=>{
   const dd = e.target.closest("[data-docdel]");
   if(dd){ DOCS.splice(+dd.dataset.docdel,1); HITS = DOCS.length ? buildIndex() : null;
           render(); return; }
+  const ask = e.target.closest("[data-ask]");
+  if(ask && !ask.disabled){ askClaude(+ask.dataset.ask); return; }
   const cp = e.target.closest("[data-copytext]");
   if(cp){
     const txt = cp.dataset.copytext;
@@ -1097,59 +1110,99 @@ render();
    Every rule is published on the Rules card so the pass can be reproduced by hand. */
 
 const TERMS = [
- {n:1, en:["governance","accountab","board","committee","steering","charter",
-           "terms of reference","reporting line","remit","oversight body","chief ai",
-           "responsible executive","decision rights"],
-      ar:["حوكمة","مساءلة","لجنة","مجلس","اختصاص","إشراف","صلاحيات","تبعية"]},
- {n:2, en:["risk","impact assessment","risk register","risk tier","classification",
-           "pre-deployment","taxonomy","threat model","due diligence"],
-      ar:["مخاطر","تقييم أثر","سجل المخاطر","تصنيف","قبل النشر","تهديد"]},
- {n:3, en:["evaluat","testing","tested","benchmark","red team","red-team","metric",
-           "accuracy","validation","test result","assessment of performance"],
-      ar:["تقييم","اختبار","معيار مرجعي","قياس","دقة","نتائج الاختبار"]},
- {n:4, en:["incident","response plan","mitigat","remediat","escalat","withdraw",
-           "suspend","rollback","vulnerability","bug bounty","playbook","takedown"],
-      ar:["حادث","استجابة","تخفيف","معالجة","تصعيد","إيقاف","سحب","ثغرة"]},
- {n:5, en:["transparen","explainab","explainable","interpretab","model card",
-           "system card","disclos","documentation","provenance","watermark",
-           "content credential","label"],
-      ar:["شفافية","تفسير","إفصاح","توثيق","بطاقة نموذج","علامة مائية","منشأ"]},
- {n:6, en:["fairness","fair ","bias","discriminat","disparit","demographic","equit",
-           "disaggregat","representational","protected group"],
-      ar:["عدالة","إنصاف","تحيّز","تحيز","تمييز","فئات","تفاوت"]},
- {n:7, en:["reliab","safety","safe ","robust","resilien","failure","error rate",
-           "uptime","threshold","adversarial","stress test"],
-      ar:["موثوقية","سلامة","متانة","صمود","إخفاق","معدل الخطأ","عتبة"]},
- {n:8, en:["privacy","personal data","data protection","pdpl","gdpr","27701","27001",
-           "retention","minimi","consent","anonymi","pseudonymi","training data",
-           "opt-out","data protection officer"],
-      ar:["خصوصية","بيانات شخصية","حماية البيانات","موافقة","الاحتفاظ","إخفاء الهوية",
-          "بيانات التدريب"]},
+ {n:1, en:["governance","accountab","board of directors","board","committee","subcommittee",
+           "steering","charter","terms of reference","reporting line","remit","mandate",
+           "oversight body","oversight function","chief ai","responsible ai lead",
+           "responsible executive","decision rights","escalation path","governance framework",
+           "governance structure","internal audit","three lines","risk committee",
+           "ethics board","review board","42001"],
+      ar:["حوكمة","الحوكمة","حوكمية","مساءلة","المساءلة","لجنة","اللجنة","لجان","مجلس","المجلس",
+          "اختصاص","اختصاصات","إشراف","الإشراف","صلاحيات","تبعية","هيكل الحوكمة","ميثاق",
+          "المسؤول عن","مسؤولية"]},
+
+ {n:2, en:["risk","risks","impact assessment","risk assessment","risk register","risk tier",
+           "risk tiering","risk classification","risk taxonomy","high-risk","high risk",
+           "pre-deployment","pre deployment","threat model","due diligence","risk appetite",
+           "risk framework","risk management","materiality","use-case inventory",
+           "system inventory","context mapping","harm","harms"],
+      ar:["مخاطر","المخاطر","خطر","تقييم أثر","تقييم الأثر","سجل المخاطر","تصنيف المخاطر",
+          "مستويات المخاطر","قبل النشر","تهديد","التهديدات","إدارة المخاطر","حصر","ضرر",
+          "الأضرار","عالية المخاطر"]},
+
+ {n:3, en:["evaluat","testing","tested","benchmark","red team","red-team","red teaming",
+           "metric","metrics","accuracy","precision","recall","validation","validated",
+           "test result","performance","model evaluation","capability evaluation",
+           "scorecard","measurement","measured"],
+      ar:["تقييم","التقييم","تقييمات","اختبار","الاختبار","اختبارات","معيار مرجعي","قياس",
+          "القياس","دقة","الدقة","نتائج","أداء","الأداء","تحقق","التحقق"]},
+
+ {n:4, en:["incident","incidents","response plan","incident response","mitigat","remediat",
+           "escalat","withdraw","withdrawn","suspend","suspended","rollback","roll back",
+           "vulnerability","vulnerabilities","bug bounty","playbook","takedown","kill switch",
+           "deprecat","corrective action","root cause","post-mortem","postmortem",
+           "disclosure program"],
+      ar:["حادث","حوادث","الحوادث","استجابة","الاستجابة","تخفيف","معالجة","المعالجة","تصعيد",
+          "إيقاف","سحب","ثغرة","ثغرات","إجراء تصحيحي","السبب الجذري","تعطيل"]},
+
+ {n:5, en:["transparen","explainab","explainable","interpretab","model card","system card",
+           "data card","disclos","documentation","documented","provenance","watermark",
+           "content credential","c2pa","labelling","labeling","intended use","limitations",
+           "known limitations","technical report","system report","ai-generated",
+           "synthetic media","nutrition label"],
+      ar:["شفافية","الشفافية","تفسير","التفسير","قابلية التفسير","إفصاح","الإفصاح","توثيق",
+          "التوثيق","بطاقة نموذج","علامة مائية","منشأ","القيود","الاستخدام المقصود","وسم",
+          "محتوى مُولَّد"]},
+
+ {n:6, en:["fairness","fair ","unfair","bias","biases","biased","discriminat","disparit",
+           "demographic","demographics","equit","equality","disaggregat","representational",
+           "protected group","protected attribute","subgroup","parity","underrepresent",
+           "inclusiv"],
+      ar:["عدالة","العدالة","إنصاف","الإنصاف","تحيّز","تحيز","التحيز","تمييز","التمييز","فئات",
+          "الفئات","تفاوت","مساواة","شمول","الشمولية"]},
+
+ {n:7, en:["reliab","safety","safe ","unsafe","robust","resilien","failure","failures",
+           "error rate","uptime","availability","threshold","adversarial","stress test",
+           "jailbreak","misuse","abuse","guardrail","safeguard","safety case",
+           "capability threshold","continuity"],
+      ar:["موثوقية","الموثوقية","سلامة","السلامة","متانة","صمود","إخفاق","فشل","معدل الخطأ",
+          "عتبة","عتبات","ضمانات","إساءة الاستخدام","استمرارية","مرونة"]},
+
+ {n:8, en:["privacy","personal data","personal information","data protection","pdpl","gdpr",
+           "ccpa","27701","27001","retention","minimi","consent","opt-in","opt-out","anonymi",
+           "pseudonymi","training data","data subject","data protection officer","encryption",
+           "cross-border","data residency","deletion","right to erasure"],
+      ar:["خصوصية","الخصوصية","بيانات شخصية","البيانات الشخصية","حماية البيانات","موافقة",
+          "الموافقة","الاحتفاظ","مدة الاحتفاظ","إخفاء الهوية","بيانات التدريب","تشفير","الحذف",
+          "نقل البيانات","مسؤول حماية البيانات"]},
+
  {n:9, en:["human oversight","human-in-the-loop","human in the loop","human review",
-           "human control","meaningful human","appeal","contest","override",
-           "approval gate","escalate to a human"],
-      ar:["رقابة بشرية","مراجعة بشرية","تدخل بشري","اعتراض","تظلّم","موافقة بشرية"]}
+           "human control","human judgment","human judgement","meaningful human","appeal",
+           "appeals","contest","contestability","override","approval gate","approval step",
+           "escalate to a human","manual review","human approval","redress","recourse"],
+      ar:["رقابة بشرية","الرقابة البشرية","مراجعة بشرية","تدخل بشري","إشراف بشري","اعتراض",
+          "تظلّم","تظلم","موافقة بشرية","مراجعة يدوية","إنصاف","الطعن"]}
 ];
 
-/* A Do artifact is a by-product of something that already happened. */
+/* A Do artifact is a by-product of something that already happened.
+   Arabic alternatives carry no \b: JavaScript word boundaries are ASCII-only. */
 const DO_SIGNALS = [
- ["a dated statement", /\b(19|20)\d{2}\b/],
- ["a named standard", /\b(ISO\/IEC|ISO)\s?\d{4,5}\b|\bSOC\s?2\b|\bNIST SP\b|\bPDPL\b/i],
- ["certification", /\bcertifi|\baccredit|\battestation\b|\bISMS\b|\bشهادة\b|\bمعتمد\b/i],
- ["a disclosed proportion", /\d+(\.\d+)?\s?%|٪/],
- ["a disclosed quantity", /\b\d{1,3}(,\d{3})+\b|\b\d+\s+(models|systems|hours|reviews|incidents|cases|assessments|audits|reports|employees|domains|principles)\b/i],
- ["a named artifact", /\bmodel card|\bsystem card|\btransparency report|\baudit report|\bassessment report|\bimpact assessment|\brisk register|\bterms of reference|\bannual report|\bwhite ?paper|\bبطاقة نموذج|\bتقرير شفافية|\bتقرير تدقيق/i],
- ["a completed act", /\bwas (conducted|completed|published|certified|audited|assessed|reviewed|established|launched)\b|\bwe (conducted|completed|published|audited|assessed|certified|reviewed|established|launched|trained)\b|\bhave been\b|\bتم إجراء|\bأُجري|\bنُشر|\bاعتُمد/i],
- ["an external party", /\bthird[- ]party\b|\bindependent (audit|assessor|review)|\bexternal (audit|review|assessor)|\bطرف ثالث\b|\bتدقيق خارجي\b/i]
+ ["a dated statement", /\b(19|20)\d{2}\b|[٠-٩]{4}/],
+ ["a named standard", /\b(ISO\/IEC|ISO)\s?\d{4,5}\b|\bSOC\s?2\b|\bNIST SP\b|\bPDPL\b|\bGDPR\b|الأيزو|نظام حماية البيانات الشخصية/i],
+ ["certification", /\bcertifi|\baccredit|\battestation\b|\bISMS\b|شهادة|معتمد|اعتماد|مُعتمد/i],
+ ["a disclosed proportion", /\d+(\.\d+)?\s?%|[٠-٩]+\s?٪|٪/],
+ ["a disclosed quantity", /\b\d{1,3}(,\d{3})+\b|\b\d+\s+(models|systems|hours|reviews|incidents|cases|assessments|audits|reports|employees|domains|principles|countries|markets|products|deployments)\b|\d+\s*(نموذجاً|نظاماً|حالة|تقريراً|مراجعة|ساعة|دولة|مبدأ|موظف)/i],
+ ["a named artifact", /\bmodel card|\bsystem card|\bdata card|\btransparency report|\baudit report|\bassessment report|\bimpact assessment|\brisk register|\bterms of reference|\bannual report|\bsustainability report|\bwhite ?paper|\bincident log|بطاقة نموذج|تقرير شفافية|تقرير تدقيق|تقرير سنوي|تقرير الاستدامة|لائحة اختصاصات|سجل المخاطر/i],
+ ["a completed act", /\bwas (conducted|completed|published|certified|audited|assessed|reviewed|established|launched|implemented|deployed)\b|\bwe (conducted|completed|published|audited|assessed|certified|reviewed|established|launched|implemented|deployed|trained|withdrew|suspended)\b|\bhave been (audited|certified|published|assessed|reviewed)\b|تم إجراء|تم نشر|تم اعتماد|تمّ |أُجري|أجرينا|نُشر|نشرنا|اعتُمد|حصلنا|أصدرنا|راجعنا|دقّقنا|طبّقنا|أنشأنا/i],
+ ["an external party", /\bthird[- ]party\b|\bindependent (audit|assessor|review|evaluation)|\bexternal (audit|review|assessor|evaluation)|طرف ثالث|تدقيق خارجي|جهة مستقلة|مدقق خارجي/i]
 ];
 
 /* A Say artifact is a statement about intended or claimed conduct. */
 const SAY_SIGNALS = [
- ["a commitment", /\b(we|our)\s+(are\s+)?commit(ted|ment|s)?\b|\bcommitment to\b|\bنلتزم\b|\bالتزام\b/i],
- ["an aspiration", /\bwe (believe|strive|aspire|seek|endeavou?r)\b|\baims? to\b|\bseeks? to\b|\bنسعى\b|\bنهدف\b|\bنطمح\b/i],
- ["a future tense", /\bwill\b|\bshall\b|\bintends? to\b|\bplans? to\b|\bgoing to\b|\bسوف\b|\bسن[يتن]/i],
- ["a value statement", /\bprinciples?\b|\bour values\b|\bour approach\b|\bphilosophy\b|\bpledge\b|\bمبادئ\b|\bقيمنا\b|\bنهجنا\b/i],
- ["a normative verb", /\bshould\b|\bmust\b|\bought to\b|\bينبغي\b|\bيجب\b/i]
+ ["a commitment", /\b(we|our)\s+(are\s+)?commit(ted|ment|s)?\b|\bcommitment to\b|نلتزم|يلتزم|ملتزم|التزامنا|التزام |تعهد|نتعهد/i],
+ ["an aspiration", /\bwe (believe|strive|aspire|seek|endeavou?r|recognise|recognize)\b|\baims? to\b|\bseeks? to\b|\bworks? to\b|نسعى|يسعى|نهدف|يهدف|نطمح|نؤمن|نعتقد|نحرص/i],
+ ["a future tense", /\bwill\b|\bshall\b|\bintends? to\b|\bplans? to\b|\bgoing to\b|\bcontinue to\b|سوف|سنقوم|سنعمل|سنواصل|سيتم|ستقوم/i],
+ ["a value statement", /\bprinciples?\b|\bour values\b|\bour approach\b|\bphilosophy\b|\bpledge\b|\bvision\b|مبادئ|قيمنا|نهجنا|رؤيتنا|فلسفتنا/i],
+ ["a normative verb", /\bshould\b|\bmust\b|\bought to\b|ينبغي|يجب|لا بد|من الواجب/i]
 ];
 
 let DOCS = [];     // [{name, segments:[{loc, text}]}]
@@ -1303,6 +1356,7 @@ function renderAnalyse(){
         <em>لا شيء في هذه الوثائق يتناول هذا البُعد.</em></p>`}
       ${h.passages.length > 40 ? `<p class="note">Showing the 40 passages with the most signals,
         of ${h.passages.length}.<em>تُعرض أربعون مقطعاً بأكثر الإشارات من أصل ${h.passages.length}.</em></p>` : ""}
+      ${h.passages.length ? aiBlock(h.n) : ""}
     </div>`;
   }).join("");
 
@@ -1353,6 +1407,89 @@ function rulesCard(){
       ${sig(SAY_SIGNALS,"Commitment language — إشارات القول","var(--say)")}
     </table></div>
   </div>`;
+}
+
+/* ===================== OPTIONAL: ASK CLAUDE =====================
+   Available only where the page runs with the sampling capability. On a plain
+   web host the button is absent and the rule-based reader is unaffected. */
+let SAMPLE = null, SAMPLE_READY = false;
+const AI = {};   // dimension number -> {loading} | {data} | {error}
+
+(async ()=>{
+  try{
+    if(typeof window !== "undefined" && window.claude && window.claude.use)
+      SAMPLE = await window.claude.use("sample");
+  }catch(e){ SAMPLE = null; }
+  SAMPLE_READY = true;
+  if(TAB === "analyse") renderAnalyse();
+})();
+
+async function askClaude(n){
+  if(!SAMPLE || !HITS) return;
+  const d = DIMS[n-1];
+  const h = HITS.find(x=>x.n === n);
+  if(!h || !h.passages.length) return;
+  AI[n] = {loading:true};
+  renderAnalyse();
+
+  const crit = ["say","do"].map(f=>
+    (f === "say" ? "SAY criteria (what the organization declares):\n"
+                 : "DO criteria (what a retrievable artifact shows it does):\n") +
+    d[f].map((c,i)=>`${i} = ${c[0]}`).join("\n")).join("\n\n");
+
+  const passages = h.passages.slice(0,14)
+    .map((p,i)=>`[${i+1}] (${p.doc}, ${p.loc}) ${p.text}`).join("\n\n");
+
+  const prompt =
+`You are assisting a content-analysis study that scores an organization on the dimension below, twice: once for what it declares (Say) and once for what published artifacts show it does (Do). Each face is scored 0 to 3 against the stated criteria. Assign the highest level whose criterion is fully satisfied by the passages given. A statement of intention is never Do evidence. If no passage supports a level above 0, say 0.
+
+DIMENSION ${d.n}: ${d.en}
+
+${crit}
+
+PASSAGES RETRIEVED FROM THE ORGANIZATION'S DOCUMENTS:
+
+${passages}
+
+Reply with JSON only, no other text:
+{"say": <0-3>, "sayPassage": <passage number or 0>, "sayWhy": "<one sentence: why this level and not the one above>",
+ "do": <0-3>, "doPassage": <passage number or 0>, "doWhy": "<one sentence: why this level and not the one above>"}`;
+
+  try{
+    const r = await SAMPLE.json(prompt, {modelTier:"complex"});
+    AI[n] = {data:r, when:new Date().toISOString().slice(0,16).replace("T"," ")};
+  }catch(err){
+    AI[n] = {error:(err && err.message) || "The request was refused."};
+  }
+  renderAnalyse();
+}
+
+function aiBlock(n){
+  if(!SAMPLE) return "";
+  const st = AI[n];
+  const btn = `<button class="btn mini" data-ask="${n}" style="margin:0"
+      ${st && st.loading ? "disabled" : ""}>${st && st.loading
+      ? "Reading… — جارٍ القراءة" : "Ask Claude to suggest a score — اطلب اقتراحاً"}</button>`;
+  if(!st || st.loading) return `<div class="airow">${btn}</div>`;
+  if(st.error) return `<div class="airow">${btn}
+    <span class="note" style="color:var(--bad)">${esc(st.error)}</span></div>`;
+  const r = st.data || {};
+  const cell = (face, score, pass, why) => `
+    <div class="aicell">
+      <div class="k">${face}</div>
+      <div class="v" style="color:var(--${face === "Say" ? "say" : "do"})">${esc(String(score))}</div>
+      <div class="n">${pass ? "from passage " + esc(String(pass)) : "no supporting passage"}
+        <em>${esc(why || "")}</em></div>
+    </div>`;
+  return `<div class="airow">${btn}</div>
+    <div class="aibox">
+      <div class="aigrid">
+        ${cell("Say", r.say, r.sayPassage, r.sayWhy)}
+        ${cell("Do", r.do, r.doPassage, r.doWhy)}
+      </div>
+      <p class="note" style="margin:10px 0 0">A suggestion, not a score. It is not reproducible: the same request can return a different answer, so it is never recorded as the study's value. Read the passage it names and judge for yourself. Generated ${esc(st.when || "")}.
+        <em>اقتراح لا درجة. غير قابل للتكرار — الطلب نفسه قد يعطي جواباً مختلفاً، فلا يُسجَّل قيمةً للدراسة. اقرئي المقطع الذي يسمّيه واحكمي بنفسك.</em></p>
+    </div>`;
 }
 </script>
 
