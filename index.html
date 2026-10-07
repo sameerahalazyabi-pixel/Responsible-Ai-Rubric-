@@ -16,6 +16,7 @@ img{max-width:100%}
 
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 
 <style>
 /* Layout: a petrol header band over a single column of cards — download, upload, read. */
@@ -208,6 +209,22 @@ td.num{font-family:var(--f-num);font-variant-numeric:tabular-nums;text-align:cen
 .mcell .mv{font-family:var(--f-num);font-size:12px;font-weight:600;flex:none;width:22px;
            text-align:right;font-variant-numeric:tabular-nums}
 
+.pass{border:1px solid var(--line-soft);border-radius:10px;padding:12px 14px;margin-bottom:10px;
+      background:var(--surface-2)}
+.pass-head{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px}
+.pass-head .src{font-family:var(--f-num);font-size:10.5px;color:var(--ink-3)}
+.pass .quote{font-size:12.5px;line-height:1.65;color:var(--ink);margin:0 0 9px;
+             max-width:none;border-left:3px solid var(--line);padding-left:11px}
+.sigs{display:flex;flex-wrap:wrap;gap:5px}
+.chip{display:inline-block;border-radius:999px;padding:2px 9px;font-size:10.5px;font-weight:600;
+      background:var(--surface-3);color:var(--ink-2)}
+.chip.t{background:var(--surface-3);color:var(--ink-2)}
+.chip.d{background:var(--do-soft);color:var(--do)}
+.chip.s{background:var(--say-soft);color:var(--say)}
+.b-do{background:var(--do-soft);color:var(--do)}
+.b-say{background:var(--say-soft);color:var(--say)}
+.btn.mini{padding:4px 10px;font-size:11px;margin-inline-start:auto}
+details summary::-webkit-details-marker{color:var(--ink-3)}
 .out{width:100%;min-height:220px;font-family:var(--f-num);font-size:11px;line-height:1.6;white-space:pre}
 .bad-row{background:var(--bad-soft)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
@@ -227,6 +244,7 @@ td.num{font-family:var(--f-num);font-variant-numeric:tabular-nums;text-align:cen
 
 <main class="wrap">
   <section id="t-start"></section>
+  <section id="t-analyse" hidden></section>
   <section id="t-results" hidden></section>
   <section id="t-rel" hidden></section>
   <section id="t-ref" hidden></section>
@@ -687,7 +705,8 @@ function vectorOf(set){
 const setLabel = s => `${s.org} · ${s.coder}`;
 
 /* ===================== VIEWS ===================== */
-const TABS = [["start","Start","البداية"],["results","Results","النتائج"],
+const TABS = [["start","Start","البداية"],["analyse","Documents","الوثائق"],
+              ["results","Results","النتائج"],
               ["rel","Reliability","الثبات"],["ref","Reference","المرجع"]];
 
 function renderTabs(){
@@ -1006,6 +1025,7 @@ function renderRef(){
 function render(){
   renderTabs();
   if(TAB==="start") renderStart();
+  if(TAB==="analyse") renderAnalyse();
   if(TAB==="results") renderResults();
   if(TAB==="rel") renderRel();
   if(TAB==="ref") renderRef();
@@ -1023,6 +1043,18 @@ document.addEventListener("click", e=>{
   if(tab){ TAB = tab.dataset.tab; render(); return; }
   if(e.target.id === "getform"){ downloadForm(); return; }
   if(e.target.closest("#drop")){ document.getElementById("files").click(); return; }
+  if(e.target.closest("#adrop")){ document.getElementById("afiles").click(); return; }
+  if(e.target.id === "a-add"){ addPasted(); return; }
+  const dd = e.target.closest("[data-docdel]");
+  if(dd){ DOCS.splice(+dd.dataset.docdel,1); HITS = DOCS.length ? buildIndex() : null;
+          render(); return; }
+  const cp = e.target.closest("[data-copytext]");
+  if(cp){
+    const txt = cp.dataset.copytext;
+    const done = ()=>{ cp.textContent = "Copied — تم"; setTimeout(()=>cp.textContent="Copy — نسخ",1800); };
+    try{ navigator.clipboard.writeText(txt).then(done, ()=>{}); }catch(err){}
+    return;
+  }
   const del = e.target.closest("[data-del]");
   if(del){ SETS = SETS.filter(s=>s.id !== +del.dataset.del);
            PAIR = [0, SETS.length>1?1:0]; render(); return; }
@@ -1038,25 +1070,290 @@ document.addEventListener("click", e=>{
 
 document.addEventListener("change", e=>{
   if(e.target.id === "files"){ addFiles(e.target.files); e.target.value = ""; return; }
+  if(e.target.id === "afiles"){ addDocs(e.target.files); e.target.value = ""; return; }
   if(e.target.dataset.pair !== undefined){
     PAIR[+e.target.dataset.pair] = +e.target.value; renderRel(); return;
   }
 });
 
 document.addEventListener("dragover", e=>{
-  const d = e.target.closest("#drop"); if(!d) return;
+  const d = e.target.closest("#drop, #adrop"); if(!d) return;
   e.preventDefault(); d.classList.add("over");
 });
 document.addEventListener("dragleave", e=>{
-  const d = e.target.closest("#drop"); if(d) d.classList.remove("over");
+  const d = e.target.closest("#drop, #adrop"); if(d) d.classList.remove("over");
 });
 document.addEventListener("drop", e=>{
-  const d = e.target.closest("#drop"); if(!d) return;
+  const d = e.target.closest("#drop, #adrop"); if(!d) return;
   e.preventDefault(); d.classList.remove("over");
-  if(e.dataTransfer && e.dataTransfer.files) addFiles(e.dataTransfer.files);
+  if(!e.dataTransfer || !e.dataTransfer.files) return;
+  if(d.id === "adrop") addDocs(e.dataTransfer.files); else addFiles(e.dataTransfer.files);
 });
 
 render();
+/* ===================== DOCUMENT READER =====================
+   Rule-based. The page reads the documents, finds the passages that bear on each
+   dimension, and marks each one as commitment language or as the trace of an act.
+   Every rule is published on the Rules card so the pass can be reproduced by hand. */
+
+const TERMS = [
+ {n:1, en:["governance","accountab","board","committee","steering","charter",
+           "terms of reference","reporting line","remit","oversight body","chief ai",
+           "responsible executive","decision rights"],
+      ar:["حوكمة","مساءلة","لجنة","مجلس","اختصاص","إشراف","صلاحيات","تبعية"]},
+ {n:2, en:["risk","impact assessment","risk register","risk tier","classification",
+           "pre-deployment","taxonomy","threat model","due diligence"],
+      ar:["مخاطر","تقييم أثر","سجل المخاطر","تصنيف","قبل النشر","تهديد"]},
+ {n:3, en:["evaluat","testing","tested","benchmark","red team","red-team","metric",
+           "accuracy","validation","test result","assessment of performance"],
+      ar:["تقييم","اختبار","معيار مرجعي","قياس","دقة","نتائج الاختبار"]},
+ {n:4, en:["incident","response plan","mitigat","remediat","escalat","withdraw",
+           "suspend","rollback","vulnerability","bug bounty","playbook","takedown"],
+      ar:["حادث","استجابة","تخفيف","معالجة","تصعيد","إيقاف","سحب","ثغرة"]},
+ {n:5, en:["transparen","explainab","explainable","interpretab","model card",
+           "system card","disclos","documentation","provenance","watermark",
+           "content credential","label"],
+      ar:["شفافية","تفسير","إفصاح","توثيق","بطاقة نموذج","علامة مائية","منشأ"]},
+ {n:6, en:["fairness","fair ","bias","discriminat","disparit","demographic","equit",
+           "disaggregat","representational","protected group"],
+      ar:["عدالة","إنصاف","تحيّز","تحيز","تمييز","فئات","تفاوت"]},
+ {n:7, en:["reliab","safety","safe ","robust","resilien","failure","error rate",
+           "uptime","threshold","adversarial","stress test"],
+      ar:["موثوقية","سلامة","متانة","صمود","إخفاق","معدل الخطأ","عتبة"]},
+ {n:8, en:["privacy","personal data","data protection","pdpl","gdpr","27701","27001",
+           "retention","minimi","consent","anonymi","pseudonymi","training data",
+           "opt-out","data protection officer"],
+      ar:["خصوصية","بيانات شخصية","حماية البيانات","موافقة","الاحتفاظ","إخفاء الهوية",
+          "بيانات التدريب"]},
+ {n:9, en:["human oversight","human-in-the-loop","human in the loop","human review",
+           "human control","meaningful human","appeal","contest","override",
+           "approval gate","escalate to a human"],
+      ar:["رقابة بشرية","مراجعة بشرية","تدخل بشري","اعتراض","تظلّم","موافقة بشرية"]}
+];
+
+/* A Do artifact is a by-product of something that already happened. */
+const DO_SIGNALS = [
+ ["a dated statement", /\b(19|20)\d{2}\b/],
+ ["a named standard", /\b(ISO\/IEC|ISO)\s?\d{4,5}\b|\bSOC\s?2\b|\bNIST SP\b|\bPDPL\b/i],
+ ["certification", /\bcertifi|\baccredit|\battestation\b|\bISMS\b|\bشهادة\b|\bمعتمد\b/i],
+ ["a disclosed proportion", /\d+(\.\d+)?\s?%|٪/],
+ ["a disclosed quantity", /\b\d{1,3}(,\d{3})+\b|\b\d+\s+(models|systems|hours|reviews|incidents|cases|assessments|audits|reports|employees|domains|principles)\b/i],
+ ["a named artifact", /\bmodel card|\bsystem card|\btransparency report|\baudit report|\bassessment report|\bimpact assessment|\brisk register|\bterms of reference|\bannual report|\bwhite ?paper|\bبطاقة نموذج|\bتقرير شفافية|\bتقرير تدقيق/i],
+ ["a completed act", /\bwas (conducted|completed|published|certified|audited|assessed|reviewed|established|launched)\b|\bwe (conducted|completed|published|audited|assessed|certified|reviewed|established|launched|trained)\b|\bhave been\b|\bتم إجراء|\bأُجري|\bنُشر|\bاعتُمد/i],
+ ["an external party", /\bthird[- ]party\b|\bindependent (audit|assessor|review)|\bexternal (audit|review|assessor)|\bطرف ثالث\b|\bتدقيق خارجي\b/i]
+];
+
+/* A Say artifact is a statement about intended or claimed conduct. */
+const SAY_SIGNALS = [
+ ["a commitment", /\b(we|our)\s+(are\s+)?commit(ted|ment|s)?\b|\bcommitment to\b|\bنلتزم\b|\bالتزام\b/i],
+ ["an aspiration", /\bwe (believe|strive|aspire|seek|endeavou?r)\b|\baims? to\b|\bseeks? to\b|\bنسعى\b|\bنهدف\b|\bنطمح\b/i],
+ ["a future tense", /\bwill\b|\bshall\b|\bintends? to\b|\bplans? to\b|\bgoing to\b|\bسوف\b|\bسن[يتن]/i],
+ ["a value statement", /\bprinciples?\b|\bour values\b|\bour approach\b|\bphilosophy\b|\bpledge\b|\bمبادئ\b|\bقيمنا\b|\bنهجنا\b/i],
+ ["a normative verb", /\bshould\b|\bmust\b|\bought to\b|\bينبغي\b|\bيجب\b/i]
+];
+
+let DOCS = [];     // [{name, segments:[{loc, text}]}]
+let HITS = null;   // computed index
+
+const stripTags = s => s.replace(/<script[\s\S]*?<\/script>/gi," ")
+                        .replace(/<style[\s\S]*?<\/style>/gi," ")
+                        .replace(/<[^>]+>/g," ");
+const squash = s => s.replace(/ /g," ").replace(/[ \t]+/g," ")
+                     .replace(/\n{3,}/g,"\n\n").trim();
+
+function paragraphs(text, label){
+  return squash(text).split(/\n\s*\n/)
+    .map(t=>t.replace(/\s+/g," ").trim())
+    .filter(t=>t.length >= 40)
+    .map((t,i)=>({loc:`${label} ${i+1}`, text:t}));
+}
+
+async function readPdf(buf, name){
+  if(typeof pdfjsLib === "undefined")
+    throw new Error("PDF reading is unavailable here. Save the document as .txt, or paste its text below.");
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  const pdf = await pdfjsLib.getDocument({data:buf}).promise;
+  const segs = [];
+  for(let p=1; p<=pdf.numPages; p++){
+    const page = await pdf.getPage(p);
+    const tc = await page.getTextContent();
+    const txt = squash(tc.items.map(i=>i.str).join(" "));
+    txt.split(/(?<=[.!?؟۔])\s+(?=[A-Z؀-ۿ])/)
+       .reduce((acc,s)=>{  // group short sentences into readable passages
+         if(!acc.length || (acc[acc.length-1] + " " + s).length > 420) acc.push(s);
+         else acc[acc.length-1] += " " + s;
+         return acc;
+       }, [])
+       .filter(t=>t.trim().length >= 40)
+       .forEach(t=>segs.push({loc:`p. ${p}`, text:t.trim()}));
+  }
+  return {name, segments:segs};
+}
+
+function fired(list, text){
+  return list.filter(([,re])=>re.test(text)).map(([label])=>label);
+}
+
+function buildIndex(){
+  const out = TERMS.map(t=>({n:t.n, passages:[]}));
+  DOCS.forEach(doc=>{
+    doc.segments.forEach(seg=>{
+      const low = seg.text.toLowerCase();
+      TERMS.forEach((t,i)=>{
+        const hitEn = t.en.filter(w=>low.includes(w));
+        const hitAr = t.ar.filter(w=>seg.text.includes(w));
+        const matched = hitEn.concat(hitAr);
+        if(!matched.length) return;
+        const d = fired(DO_SIGNALS, seg.text);
+        const s = fired(SAY_SIGNALS, seg.text);
+        const verdict = d.length > s.length ? "do" : s.length > d.length ? "say" : "both";
+        out[i].passages.push({doc:doc.name, loc:seg.loc, text:seg.text,
+                              terms:matched, doSig:d, saySig:s, verdict});
+      });
+    });
+  });
+  // the clearest evidence first
+  out.forEach(o=>o.passages.sort((a,b)=>
+    (b.doSig.length + b.saySig.length) - (a.doSig.length + a.saySig.length)));
+  return out;
+}
+
+async function addDocs(list){
+  const files = Array.from(list);
+  const msg = document.getElementById("a-msg");
+  for(const file of files){
+    if(msg) msg.textContent = `Reading ${file.name}…`;
+    try{
+      if(/\.pdf$/i.test(file.name)){
+        const buf = new Uint8Array(await file.arrayBuffer());
+        DOCS.push(await readPdf(buf, file.name));
+      } else {
+        let txt = await file.text();
+        if(/\.html?$/i.test(file.name)) txt = stripTags(txt);
+        DOCS.push({name:file.name, segments:paragraphs(txt, "para.")});
+      }
+    }catch(err){
+      DOCS.push({name:file.name, segments:[], error:err.message});
+    }
+  }
+  if(msg) msg.textContent = "";
+  HITS = buildIndex();
+  render();
+}
+
+function addPasted(){
+  const ta = document.getElementById("a-paste");
+  const nm = document.getElementById("a-name");
+  const txt = ta.value.trim();
+  if(!txt) return;
+  DOCS.push({name: nm.value.trim() || "Pasted text",
+             segments: paragraphs(txt, "para.")});
+  ta.value = "";
+  HITS = buildIndex();
+  render();
+}
+
+function renderAnalyse(){
+  const el = document.getElementById("t-analyse");
+  const docList = DOCS.map((d,i)=>`<div class="setrow">
+      <div class="who">${esc(d.name)}<i>${d.error ? esc(d.error)
+        : d.segments.length + " passages read"}</i></div>
+      <div class="st" style="color:${d.error?"var(--bad)":"var(--good)"}">
+        ${d.error ? "unreadable" : d.segments.length}</div>
+      <button class="x" data-docdel="${i}" title="Remove">✕</button>
+    </div>`).join("");
+
+  const pill = v => v === "do"
+    ? `<span class="pill b-do"><span class="dot"></span>Do candidate — مرشّح فعل</span>`
+    : v === "say"
+    ? `<span class="pill b-say"><span class="dot"></span>Say candidate — مرشّح قول</span>`
+    : `<span class="pill b-pend"><span class="dot"></span>Mixed — مختلط</span>`;
+
+  const chips = (arr, cls) => arr.map(x=>`<span class="chip ${cls}">${esc(x)}</span>`).join("");
+
+  const body = !HITS ? "" : HITS.map(h=>{
+    const d = DIMS[h.n-1];
+    const nDo = h.passages.filter(p=>p.verdict==="do").length;
+    const nSay = h.passages.filter(p=>p.verdict==="say").length;
+    const rows = h.passages.slice(0,40).map(p=>`
+      <div class="pass">
+        <div class="pass-head">
+          ${pill(p.verdict)}
+          <span class="src">${esc(p.doc)} · ${esc(p.loc)}</span>
+          <button class="btn mini" data-copy="${esc(p.text).slice(0,0)}"
+            data-copytext="${esc(p.text)}">Copy — نسخ</button>
+        </div>
+        <p class="quote">${esc(p.text)}</p>
+        <div class="sigs">
+          ${chips(p.terms.slice(0,4), "t")}
+          ${chips(p.doSig, "d")}
+          ${chips(p.saySig, "s")}
+        </div>
+      </div>`).join("");
+    return `<div class="card">
+      <h3>D${d.n} · ${esc(d.en)}</h3>
+      <div class="arh">${esc(d.ar)}</div>
+      <div class="lgd" style="margin-bottom:14px">
+        <span><strong>${h.passages.length}</strong>&nbsp;passages — مقطعاً</span>
+        <span style="color:var(--do)"><strong>${nDo}</strong>&nbsp;Do candidates</span>
+        <span style="color:var(--say)"><strong>${nSay}</strong>&nbsp;Say candidates</span>
+      </div>
+      ${h.passages.length ? rows : `<p class="note">Nothing in these documents mentions this dimension.
+        <em>لا شيء في هذه الوثائق يتناول هذا البُعد.</em></p>`}
+      ${h.passages.length > 40 ? `<p class="note">Showing the 40 passages with the most signals,
+        of ${h.passages.length}.<em>تُعرض أربعون مقطعاً بأكثر الإشارات من أصل ${h.passages.length}.</em></p>` : ""}
+    </div>`;
+  }).join("");
+
+  el.innerHTML = `
+  <div class="card">
+    <h3>Read the documents</h3>
+    <div class="arh">ارفع الوثائق ليقرأها الموقع ويصنّف مقاطعها</div>
+    <p>The page reads each document, finds every passage that bears on one of the nine dimensions, and marks it as commitment language or as the trace of an act that has already occurred. It proposes no score: the passages are put in front of the coder, who judges.</p>
+    <div class="drop" id="adrop">
+      <div class="big">Choose documents, or drag them here</div>
+      <div class="ar">اختر الوثائق أو اسحبها إلى هذا الموضع</div>
+      <div class="note" style="margin-top:6px">PDF · TXT · HTML · MD</div>
+      <input type="file" id="afiles" multiple accept=".pdf,.txt,.html,.htm,.md,text/*" hidden>
+    </div>
+    <span class="note" id="a-msg"></span>
+    <div style="margin-top:14px">${docList}</div>
+    <details style="margin-top:14px">
+      <summary class="note" style="cursor:pointer">Or paste the text — أو الصق النص</summary>
+      <div class="row" style="margin-top:10px">
+        <div class="field" style="width:240px"><label for="a-name">Document name <span>اسم الوثيقة</span></label>
+          <input type="text" id="a-name" placeholder="Annual Report 2025"></div>
+        <button class="btn primary" id="a-add">Add — إضافة</button>
+      </div>
+      <textarea id="a-paste" style="min-height:140px" placeholder="Paste the document text here"></textarea>
+    </details>
+  </div>
+  ${DOCS.length ? body : ""}
+  ${DOCS.length ? rulesCard() : ""}`;
+}
+
+function rulesCard(){
+  const t = TERMS.map(x=>`<tr><td class="num">D${x.n}</td>
+    <td>${esc(x.en.join(" · "))}</td>
+    <td class="ar">${esc(x.ar.join(" · "))}</td></tr>`).join("");
+  const sig = (list,label,colour) => `<tr><td colspan="3" style="background:var(--surface-2)">
+      <strong style="color:${colour}">${label}</strong></td></tr>` +
+    list.map(([name,re])=>`<tr><td colspan="2">${esc(name)}</td>
+      <td style="font-family:var(--f-num);font-size:10.5px">${esc(String(re))}</td></tr>`).join("");
+  return `<div class="card">
+    <h3>The rules</h3>
+    <div class="arh">القواعد كاملة — تُنسخ إلى فصل المنهجية</div>
+    <p>Every rule the reader applies is listed here. A reader with this table and the documents reaches the same passages, which is what makes the pass reproducible.</p>
+    <div class="scroll"><table>
+      <tr><th>Dimension</th><th>Terms (English)</th><th>المصطلحات</th></tr>${t}</table></div>
+    <div class="scroll" style="margin-top:16px"><table>
+      <tr><th colspan="2">Signal</th><th>Pattern</th></tr>
+      ${sig(DO_SIGNALS,"Traces of an act — إشارات الفعل","var(--do)")}
+      ${sig(SAY_SIGNALS,"Commitment language — إشارات القول","var(--say)")}
+    </table></div>
+  </div>`;
+}
 </script>
 
 </body>
