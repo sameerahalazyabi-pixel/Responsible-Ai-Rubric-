@@ -1,17 +1,7 @@
 <!doctype html>
 <html lang="en">
-<head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<style>
-:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);
-      padding-bottom:env(safe-area-inset-bottom,0px)}
-body{margin:0;font:14px system-ui,-apple-system,sans-serif;background:#f1eef7}
-img{max-width:100%}
-[hidden]{display:none!important}
-</style>
-</head>
-<body>
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Say–Do Gap Rubric</title>
 
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -505,7 +495,7 @@ const HEADERS = ["Organization","Coder","Cut-off date","Dimension","Facet",
 const FINDINGS = ["Evidence found","No evidence located","Contrary evidence"];
 
 let SETS = [];            // [{id, org, coder, cutoff, rows:[{dim,face,score,ev,src}], issues:[]}]
-let TAB = "start";
+let TAB = "analyse";
 let PAIR = [0,1];         // which two sets the reliability tab compares
 let SEQ = 0;
 
@@ -716,9 +706,9 @@ function vectorOf(set){
 const setLabel = s => `${s.org} · ${s.coder}`;
 
 /* ===================== VIEWS ===================== */
-const TABS = [["start","Start","البداية"],["analyse","Documents","الوثائق"],
-              ["results","Results","النتائج"],
-              ["rel","Reliability","الثبات"],["ref","Reference","المرجع"]];
+const TABS = [["analyse","Documents","الوثائق"],["start","Rubric","أداة التقييم"],
+              ["results","Results","النتائج"],["rel","Reliability","الثبات"],
+              ["ref","Criteria","المعايير"]];
 
 function renderTabs(){
   document.getElementById("tabs").innerHTML = TABS.map(([id,en,ar])=>
@@ -750,26 +740,8 @@ function renderStart(){
 
   document.getElementById("t-start").innerHTML = `
   <div class="card">
-    <h3>How it works</h3>
-    <div class="arh">الخطوات الأربع</div>
-    <div class="steps">
-      <div class="step"><span class="n">1</span><span class="t">Download the form, once for each coder and each organization.
-        <i>يُنزَّل النموذج مرةً لكل مُرمِّز ولكل منظمة.</i></span></div>
-      <div class="step"><span class="n">2</span><span class="t">Each coder fills their own copy in Excel: a score of 0 to 3, the quote relied on, and the source. When saving, keep the CSV format.
-        <i>يُعبّئ كل مُرمِّز نسخته في إكسل: الدرجة من ٠ إلى ٣، والمصدر، والاقتباس، والتسبيب. ويُحفَظ الملف بصيغة CSV كما هو.</i></span></div>
-      <div class="step"><span class="n">3</span><span class="t">Upload the filled forms here. A row scored without evidence is rejected and listed.
-        <i>تُرفَع النماذج المعبّأة هنا. ويُستبعَد كل صفٍّ حملت درجتُه نقصاً في الدليل، مع بيان سببه.</i></span></div>
-      <div class="step"><span class="n">4</span><span class="t">The results, the gap by dimension and κ are computed from the files.
-        <i>تُحتسَب النتائج والفجوة داخل الأبعاد ومعامل كابا من الملفات المرفوعة.</i></span></div>
-    </div>
-  </div>
-
-  <div class="card">
-    <h3>1 · The form</h3>
-    <div class="arh">النموذج — ملف يُفتح في إكسل، تصحبه المعايير كاملةً</div>
-    <p>The form carries all nine dimensions, both faces and the criteria for every level, in English and Arabic. Each coder fills their own copy, so both follow the same procedure and both leave a record.</p>
-    <p class="note" style="margin-bottom:12px">The cut-off date is one fixed date for the whole study — the close of the collection window — and is written into every row. The date each source was opened goes in the Accessed column, row by row.
-      <em>تاريخ الإقفال واحد ثابت للدراسة كلها، وهو نهاية نافذة جمع الأدلة، ويُكتب في كل صف. أما تاريخ الاطّلاع على كل مصدر فيُسجَّل في عمود Accessed صفاً صفاً.</em></p>
+    <h3>1 · The rubric</h3>
+    <div class="arh">أداة التقييم</div>
     <div class="row">
       <div class="field" style="width:200px"><label for="f-org">Organization <span>المنظمة</span></label>
         <input type="text" id="f-org" placeholder="stc"></div>
@@ -783,11 +755,11 @@ function renderStart(){
   </div>
 
   <div class="card">
-    <h3>2 · The filled forms</h3>
-    <div class="arh">النماذج المعبّأة — بصيغة CSV</div>
+    <h3>2 · The filled rubrics</h3>
+    <div class="arh">أدوات التقييم المعبّأة</div>
     <div class="drop" id="drop">
       <div class="big">Choose files, or drag them here</div>
-      <div class="ar">اختر الملفات أو اسحبها إلى هذا الموضع</div>
+      <div class="ar">تُختار الملفات أو تُسحَب إلى هذا الموضع</div>
       <input type="file" id="files" multiple accept=".csv,text/csv" hidden>
     </div>
     <div style="margin-top:14px">${sets || `<p class="note">No file uploaded yet.
@@ -973,7 +945,7 @@ function renderRel(){
       <tr><th>Cell <div class="ar">الخلية</div></th>
           <th>${esc(A.coder)}</th><th>${esc(B.coder)}</th><th>Δ</th></tr>
       ${rows}</table></div>
-    <p class="note" style="margin-top:12px;color:var(--warn)">Record κ before changing any score.
+    <p class="note" style="margin-top:12px;color:var(--warn)">κ is recorded before any score is changed.
       <em>يُسجَّل معامل كابا قبل تعديل أي درجة؛ فالفصل الرابع يعتمد قيمته على الترميز الأول المستقل.</em></p>
   </div>`;
 }
@@ -1056,6 +1028,7 @@ document.addEventListener("click", e=>{
   if(e.target.closest("#drop")){ document.getElementById("files").click(); return; }
   if(e.target.closest("#adrop")){ document.getElementById("afiles").click(); return; }
   if(e.target.id === "a-add"){ addPasted(); return; }
+  if(e.target.id === "getrules"){ rulesCSV(); return; }
   const dd = e.target.closest("[data-docdel]");
   if(dd){ DOCS.splice(+dd.dataset.docdel,1); HITS = DOCS.length ? buildIndex() : null;
           render(); return; }
@@ -1075,7 +1048,7 @@ document.addEventListener("click", e=>{
     const box = document.getElementById("logbox"), msg = document.getElementById("copymsg");
     const done = ()=>{ msg.textContent = "Copied — تم النسخ"; setTimeout(()=>msg.textContent="",2600); };
     const fallback = ()=>{ box.focus(); box.select();
-      msg.textContent = "Selected — press ⌘/Ctrl+C — حُدِّد النص، فاضغط ⌘/Ctrl+C"; };
+      msg.textContent = "Selected — press ⌘/Ctrl+C — حُدِّد النص — ⌘/Ctrl+C"; };
     try{ navigator.clipboard.writeText(box.value).then(done, fallback); }catch(err){ fallback(); }
     return;
   }
@@ -1102,8 +1075,6 @@ document.addEventListener("drop", e=>{
   if(!e.dataTransfer || !e.dataTransfer.files) return;
   if(d.id === "adrop") addDocs(e.dataTransfer.files); else addFiles(e.dataTransfer.files);
 });
-
-render();
 /* ===================== DOCUMENT READER =====================
    Rule-based. The page reads the documents, finds the passages that bear on each
    dimension, and marks each one as commitment language or as the trace of an act.
@@ -1407,11 +1378,10 @@ function renderAnalyse(){
   el.innerHTML = `
   <div class="card">
     <h3>Read the documents</h3>
-    <div class="arh">ارفع الوثائق ليقرأها الموقع ويصنّف مقاطعها</div>
-    <p>The page reads each document, finds every passage that bears on one of the nine dimensions, and marks it as commitment language or as the trace of an act that has already occurred. It proposes no score: the passages are put in front of the coder, who judges.</p>
+    <div class="arh">قراءة الوثائق</div>
     <div class="drop" id="adrop">
       <div class="big">Choose documents, or drag them here</div>
-      <div class="ar">اختر الوثائق أو اسحبها إلى هذا الموضع</div>
+      <div class="ar">تُختار الوثائق أو تُسحَب إلى هذا الموضع</div>
       <div class="note" style="margin-top:6px">PDF · TXT · HTML · MD</div>
       <input type="file" id="afiles" multiple accept=".pdf,.txt,.html,.htm,.md,text/*" hidden>
     </div>
@@ -1431,6 +1401,23 @@ function renderAnalyse(){
   ${DOCS.length ? rulesCard() : ""}`;
 }
 
+function rulesCSV(){
+  const rows = [["Section","Item","English","العربية","Example"]];
+  TERMS.forEach(t=>rows.push(["Dimension terms", "D"+t.n, t.en.join(" | "), t.ar.join(" | "), ""]));
+  DO_SIGNALS.forEach(([n])=>{ const g = GLOSS[n]||["","",""];
+    rows.push(["Traces of an act", n, g[0], g[1], g[2]]); });
+  SAY_SIGNALS.forEach(([n])=>{ const g = GLOSS[n]||["","",""];
+    rows.push(["Commitment language", n, g[0], g[1], g[2]]); });
+  DO_SIGNALS.concat(SAY_SIGNALS).forEach(([n,re])=>
+    rows.push(["Pattern as coded", n, String(re), "", ""]));
+  const blob = new Blob([toCSV(rows)], {type:"text/csv;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+  const el = document.createElement("a");
+  el.href = url; el.download = "say-do_reading_rules.csv";
+  document.body.appendChild(el); el.click(); el.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 2000);
+}
+
 function rulesCard(){
   const t = TERMS.map(x=>`<tr><td class="num">D${x.n}</td>
     <td>${esc(x.en.join(" · "))}</td>
@@ -1444,10 +1431,15 @@ function rulesCard(){
         <td style="font-family:var(--f-num);font-size:11px">${esc(g[2])}</td></tr>`;
     }).join("");
   return `<div class="card">
-    <h3>The rules</h3>
-    <div class="arh">القواعد كاملة — تُنسخ إلى فصل المنهجية</div>
-    <p>Every rule the reader applies is listed here. A reader with this table and the documents reaches the same passages, which is what makes the pass reproducible.</p>
-    <div class="scroll"><table>
+    <h3>The reading rules</h3>
+    <div class="arh">القواعد التي يطبّقها القارئ</div>
+    <p>Every rule is published, so a reader with this table and the documents reaches the same passages. That is what makes the pass reproducible.</p>
+    <div class="row">
+      <button class="btn primary" id="getrules">Download for the appendix — تنزيلها للملحق</button>
+    </div>
+    <details>
+    <summary class="note" style="cursor:pointer;padding:4px 0">Show the rules — عرض القواعد</summary>
+    <div class="scroll" style="margin-top:12px"><table>
       <tr><th>Dimension</th><th>Terms (English)</th><th>المصطلحات</th></tr>${t}</table></div>
     <div class="scroll" style="margin-top:16px"><table>
       <tr><th>Signal <div class="ar">الإشارة</div></th>
@@ -1466,6 +1458,7 @@ function rulesCard(){
       </table></div>
       <p class="note" style="margin-top:8px">These belong in a replication package, not in the thesis text.
         <em>موضعها حزمة إعادة الإنتاج لا متن الرسالة.</em></p>
+    </details>
     </details>
   </div>`;
 }
@@ -1548,11 +1541,13 @@ function aiBlock(n){
         ${cell("Say", r.say, r.sayPassage, r.sayWhy)}
         ${cell("Do", r.do, r.doPassage, r.doWhy)}
       </div>
-      <p class="note" style="margin:10px 0 0">A suggestion, not a score. It is not reproducible: the same request can return a different answer, so it is never recorded as the study's value. Read the passage it names and judge for yourself. Generated ${esc(st.when || "")}.
-        <em>اقتراح لا درجة. غير قابل للتكرار — الطلب نفسه قد يعطي جواباً مختلفاً، فلا يُسجَّل قيمةً للدراسة. اقرئي المقطع الذي يسمّيه واحكمي بنفسك.</em></p>
+      <p class="note" style="margin:10px 0 0">A suggestion, not a score. It is not reproducible: the same request can return a different answer, so it is never recorded as the study's value. Generated ${esc(st.when || "")}.
+        <em>اقتراح لا درجة. وهو غير قابل للتكرار، إذ قد يعطي الطلب نفسه جواباً مختلفاً، فلا يُسجَّل قيمةً للدراسة.</em></p>
     </div>`;
 }
+
+/* every binding is now initialised */
+render();
 </script>
 
-</body>
 </html>
