@@ -1205,6 +1205,50 @@ const SAY_SIGNALS = [
  ["a normative verb", /\bshould\b|\bmust\b|\bought to\b|ينبغي|يجب|لا بد|من الواجب/i]
 ];
 
+
+/* How each signal reads to a human. The pattern itself stays in the code. */
+const GLOSS = {
+ "a dated statement":   ["A four-digit year, in Western or Arabic-Indic numerals",
+                         "سنة من أربع خانات، بالأرقام اللاتينية أو العربية",
+                         "in 2025 · عام ٢٠٢٥"],
+ "a named standard":    ["A named standard or regulation",
+                         "معيار أو نظام مُسمّى",
+                         "ISO/IEC 27701 · GDPR · نظام حماية البيانات الشخصية"],
+ "certification":       ["Words of certification or accreditation",
+                         "ألفاظ الاعتماد والشهادات",
+                         "certified · accredited · شهادة · معتمد"],
+ "a disclosed proportion":["A percentage",
+                         "نسبة مئوية",
+                         "91.2% · ٩١٪"],
+ "a disclosed quantity":["A counted quantity of things",
+                         "كمية معدودة",
+                         "47 systems · 1,250 reviews · ٤٧ نظاماً"],
+ "a named artifact":    ["The name of a published artifact",
+                         "اسم مُخرَج منشور",
+                         "model card · audit report · تقرير شفافية · سجل المخاطر"],
+ "a completed act":     ["A verb in the completed past, first person or passive",
+                         "فعل ماضٍ تام، بصيغة المتكلم أو المبني للمجهول",
+                         "we published · was audited · نشرنا · تم إجراء"],
+ "an external party":   ["An external or independent party",
+                         "طرف خارجي أو مستقل",
+                         "third-party audit · independent review · تدقيق خارجي"],
+ "a commitment":        ["A statement of commitment",
+                         "تصريح بالالتزام",
+                         "we are committed · commitment to · نلتزم · تعهد"],
+ "an aspiration":       ["A verb of striving, seeking or belief",
+                         "فعل سعي أو اعتقاد",
+                         "we strive · aims to · نسعى · نؤمن"],
+ "a future tense":      ["A verb in the future, or a stated intention",
+                         "فعل مستقبل أو نية معلنة",
+                         "will · plans to · سوف · سنواصل"],
+ "a value statement":   ["A reference to principles, values or vision",
+                         "إحالة إلى مبادئ أو قيم أو رؤية",
+                         "our principles · our values · مبادئنا · رؤيتنا"],
+ "a normative verb":    ["A verb of obligation",
+                         "فعل وجوب",
+                         "should · must · يجب · ينبغي"]
+};
+
 let DOCS = [];     // [{name, segments:[{loc, text}]}]
 let HITS = null;   // computed index
 
@@ -1393,8 +1437,12 @@ function rulesCard(){
     <td class="ar">${esc(x.ar.join(" · "))}</td></tr>`).join("");
   const sig = (list,label,colour) => `<tr><td colspan="3" style="background:var(--surface-2)">
       <strong style="color:${colour}">${label}</strong></td></tr>` +
-    list.map(([name,re])=>`<tr><td colspan="2">${esc(name)}</td>
-      <td style="font-family:var(--f-num);font-size:10.5px">${esc(String(re))}</td></tr>`).join("");
+    list.map(([name])=>{
+      const g = GLOSS[name] || ["","",""];
+      return `<tr><td><strong>${esc(name)}</strong></td>
+        <td>${esc(g[0])}<div class="ar">${esc(g[1])}</div></td>
+        <td style="font-family:var(--f-num);font-size:11px">${esc(g[2])}</td></tr>`;
+    }).join("");
   return `<div class="card">
     <h3>The rules</h3>
     <div class="arh">القواعد كاملة — تُنسخ إلى فصل المنهجية</div>
@@ -1402,10 +1450,23 @@ function rulesCard(){
     <div class="scroll"><table>
       <tr><th>Dimension</th><th>Terms (English)</th><th>المصطلحات</th></tr>${t}</table></div>
     <div class="scroll" style="margin-top:16px"><table>
-      <tr><th colspan="2">Signal</th><th>Pattern</th></tr>
+      <tr><th>Signal <div class="ar">الإشارة</div></th>
+          <th>What it matches <div class="ar">ما تلتقطه</div></th>
+          <th>Example <div class="ar">مثال</div></th></tr>
       ${sig(DO_SIGNALS,"Traces of an act — إشارات الفعل","var(--do)")}
       ${sig(SAY_SIGNALS,"Commitment language — إشارات القول","var(--say)")}
     </table></div>
+    <details style="margin-top:14px">
+      <summary class="note" style="cursor:pointer">The patterns as written in the code — الصيغة البرمجية للأنماط</summary>
+      <div class="scroll" style="margin-top:10px"><table>
+        ${DO_SIGNALS.concat(SAY_SIGNALS).map(([name,re])=>`<tr>
+          <td style="white-space:nowrap">${esc(name)}</td>
+          <td style="font-family:var(--f-num);font-size:10px;word-break:break-all">${esc(String(re))}</td>
+        </tr>`).join("")}
+      </table></div>
+      <p class="note" style="margin-top:8px">These belong in a replication package, not in the thesis text.
+        <em>موضعها حزمة إعادة الإنتاج لا متن الرسالة.</em></p>
+    </details>
   </div>`;
 }
 
