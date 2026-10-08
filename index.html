@@ -486,12 +486,233 @@ const RULES = [
   "تتطلب أي درجة فعل فوق الصفر مُخرَجاً مُسمّى قابلاً للاسترجاع يستوفي المعيار المعني."]
 ];
 
+/* ============ minimal .xlsx writer and reader, no library ============ */
+
+const CRCT = (()=>{ const t = new Uint32Array(256);
+  for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c = c&1 ? 0xEDB88320 ^ (c>>>1) : c>>>1; t[n]=c>>>0; }
+  return t; })();
+function crc32(u8){ let c = 0xFFFFFFFF;
+  for(let i=0;i<u8.length;i++) c = CRCT[(c ^ u8[i]) & 0xFF] ^ (c>>>8);
+  return (c ^ 0xFFFFFFFF)>>>0; }
+
+const enc = s => new TextEncoder().encode(s);
+
+/* store-only zip (no compression) — Excel reads it */
+function zip(files){
+  const parts = [], central = [];
+  let off = 0;
+  const w = (n, len)=>{ const a = new Uint8Array(len);
+    for(let i=0;i<len;i++) a[i] = (n >>> (8*i)) & 0xFF; return a; };
+  files.forEach(f=>{
+    const name = enc(f.name), data = f.data, c = crc32(data);
+    const head = [enc("PK\x03\x04"), w(20,2), w(0x800,2), w(0,2), w(0,2), w(0,2),
+                  w(c,4), w(data.length,4), w(data.length,4), w(name.length,2), w(0,2), name];
+    const hlen = head.reduce((n,a)=>n+a.length,0);
+    parts.push(...head, data);
+    central.push([enc("PK\x01\x02"), w(20,2), w(20,2), w(0x800,2), w(0,2), w(0,2), w(0,2),
+                  w(c,4), w(data.length,4), w(data.length,4), w(name.length,2),
+                  w(0,2), w(0,2), w(0,2), w(0,2), w(0,4), w(off,4), name]);
+    off += hlen + data.length;
+  });
+  const cparts = central.flat();
+  const clen = cparts.reduce((n,a)=>n+a.length,0);
+  const eocd = [enc("PK\x05\x06"), w(0,2), w(0,2), w(files.length,2), w(files.length,2),
+                w(clen,4), w(off,4), w(0,2)];
+  const all = [...parts, ...cparts, ...eocd];
+  const total = all.reduce((n,a)=>n+a.length,0);
+  const out = new Uint8Array(total);
+  let p = 0; all.forEach(a=>{ out.set(a,p); p += a.length; });
+  return out;
+}
+
+const xe = s => String(s==null?"":s)
+  .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+  .replace(/"/g,"&quot;").replace(/\r/g,"");
+
+const colName = i => { let s=""; i++; while(i>0){ const m=(i-1)%26; s=String.fromCharCode(65+m)+s; i=(i-m-1)/26; } return s; };
+const colIndex = ref => { const m=/^([A-Z]+)/.exec(ref); let n=0;
+  for(const ch of m[1]) n = n*26 + (ch.charCodeAt(0)-64); return n-1; };
+
+/* ---- styles ----
+   0 default · 1 band head · 2 column head · 3 dimension cell
+   4 criteria (wrapped) · 5 entry cell · 6 entry cell (wide, wrapped) */
+const STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<fonts count="5">
+<font><sz val="11"/><name val="Calibri"/></font>
+<font><b/><sz val="12"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font>
+<font><b/><sz val="10"/><color rgb="FF2A1550"/><name val="Calibri"/></font>
+<font><b/><sz val="11"/><color rgb="FF2A1550"/><name val="Calibri"/></font>
+<font><sz val="9"/><color rgb="FF4A4458"/><name val="Calibri"/></font>
+</fonts>
+<fills count="13">
+<fill><patternFill patternType="none"/></fill>
+<fill><patternFill patternType="gray125"/></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FF2A1550"/><bgColor indexed="64"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFEFE9FA"/><bgColor indexed="64"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFF7F4FC"/><bgColor indexed="64"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FF5B3A9E"/><bgColor indexed="64"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFFFFFFF"/><bgColor indexed="64"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFF5F9FE"/><bgColor indexed="64"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFFFF8F3"/><bgColor indexed="64"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFE8F0FA"/><bgColor indexed="64"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFFBEADF"/><bgColor indexed="64"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FF1F62B8"/><bgColor indexed="64"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFC2541F"/><bgColor indexed="64"/></patternFill></fill>
+</fills>
+<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border>
+<border><left style="thin"><color rgb="FFDBD4EA"/></left><right style="thin"><color rgb="FFDBD4EA"/></right>
+<top style="thin"><color rgb="FFDBD4EA"/></top><bottom style="thin"><color rgb="FFDBD4EA"/></bottom><diagonal/></border>
+</borders>
+<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+<cellXfs count="16">
+<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="2" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="3" fillId="4" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="4" fillId="4" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="0" fillId="6" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="top"/></xf>
+<xf numFmtId="0" fontId="0" fillId="6" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="1" fillId="5" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="0" fillId="7" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="top"/></xf>
+<xf numFmtId="0" fontId="0" fillId="7" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="0" fillId="8" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="top"/></xf>
+<xf numFmtId="0" fontId="0" fillId="8" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="4" fillId="9" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="4" fillId="10" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="1" fillId="11" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="1" fillId="12" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+</cellXfs>
+<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+</styleSheet>`;
+
+/* rows: array of {cells:[{v, s, num}], h} ; cols: [{w}] */
+function sheetXml(rows, cols, merges, validations, freeze){
+  const body = rows.map((r,i)=>{
+    const n = i + 1;
+    const cells = r.cells.map((c,j)=>{
+      if(c == null) return "";
+      const ref = colName(j) + n, s = c.s ? ` s="${c.s}"` : "";
+      if(c.v === "" || c.v == null) return `<c r="${ref}"${s}/>`;
+      if(c.num) return `<c r="${ref}"${s}><v>${xe(c.v)}</v></c>`;
+      return `<c r="${ref}"${s} t="inlineStr"><is><t xml:space="preserve">${xe(c.v)}</t></is></c>`;
+    }).join("");
+    return `<row r="${n}"${r.h?` ht="${r.h}" customHeight="1"`:""}>${cells}</row>`;
+  }).join("");
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<sheetViews><sheetView tabSelected="1" workbookViewId="0">
+<pane ySplit="${freeze}" topLeftCell="A${freeze+1}" activePane="bottomLeft" state="frozen"/>
+</sheetView></sheetViews>
+<sheetFormatPr defaultRowHeight="15"/>
+<cols>${cols.map((c,i)=>`<col min="${i+1}" max="${i+1}" width="${c.w}" customWidth="1"/>`).join("")}</cols>
+<sheetData>${body}</sheetData>
+${merges.length?`<mergeCells count="${merges.length}">${merges.map(m=>`<mergeCell ref="${m}"/>`).join("")}</mergeCells>`:""}
+${validations.length?`<dataValidations count="${validations.length}">${validations.map(v=>
+  `<dataValidation type="list" allowBlank="1" showInputMessage="1" showErrorMessage="1" sqref="${v.sqref}"><formula1>"${v.list}"</formula1></dataValidation>`).join("")}</dataValidations>`:""}
+</worksheet>`;
+}
+
+function buildXlsx(sheet){
+  const files = [
+    {name:"[Content_Types].xml", data: enc(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+</Types>`)},
+    {name:"_rels/.rels", data: enc(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>`)},
+    {name:"xl/workbook.xml", data: enc(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheets><sheet name="Coding" sheetId="1" r:id="rId1"/></sheets></workbook>`)},
+    {name:"xl/_rels/workbook.xml.rels", data: enc(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>`)},
+    {name:"xl/styles.xml", data: enc(STYLES)},
+    {name:"xl/worksheets/sheet1.xml", data: enc(sheet)}
+  ];
+  return zip(files);
+}
+
+/* ---------------- reading an .xlsx back into an array of arrays ---------------- */
+async function unzip(buf){
+  const u8 = new Uint8Array(buf), dv = new DataView(buf);
+  let eo = u8.length - 22;
+  while(eo >= 0 && dv.getUint32(eo, true) !== 0x06054b50) eo--;
+  if(eo < 0) throw new Error("This does not look like an Excel file.");
+  const n = dv.getUint16(eo+10, true);
+  let p = dv.getUint32(eo+16, true);
+  const out = {};
+  for(let i=0;i<n;i++){
+    const method = dv.getUint16(p+10, true);
+    const csize  = dv.getUint32(p+20, true);
+    const nlen   = dv.getUint16(p+28, true);
+    const elen   = dv.getUint16(p+30, true);
+    const clen   = dv.getUint16(p+32, true);
+    const lho    = dv.getUint32(p+42, true);
+    const name   = new TextDecoder().decode(u8.subarray(p+46, p+46+nlen));
+    const lnlen  = dv.getUint16(lho+26, true), lelen = dv.getUint16(lho+28, true);
+    const start  = lho + 30 + lnlen + lelen;
+    const raw    = u8.subarray(start, start + csize);
+    if(method === 0) out[name] = new TextDecoder().decode(raw);
+    else if(typeof DecompressionStream === "function"){
+      const ds = new DecompressionStream("deflate-raw");
+      const blob = new Blob([raw]).stream().pipeThrough(ds);
+      out[name] = await new Response(blob).text();
+    } else throw new Error("This browser cannot open compressed Excel files. Save the file as CSV instead.");
+    p += 46 + nlen + elen + clen;
+  }
+  return out;
+}
+
+async function readXlsx(buf){
+  const parts = await unzip(buf);
+  const shared = [];
+  const ss = parts["xl/sharedStrings.xml"];
+  if(ss) (ss.match(/<si>[\s\S]*?<\/si>/g) || []).forEach(si=>{
+    shared.push((si.match(/<t[^>]*>([\s\S]*?)<\/t>/g) || [])
+      .map(t=>t.replace(/<[^>]+>/g,"")).join(""));
+  });
+  const key = Object.keys(parts).find(k=>/^xl\/worksheets\/sheet1\.xml$/.test(k))
+           || Object.keys(parts).find(k=>/^xl\/worksheets\//.test(k));
+  const xml = parts[key] || "";
+  const un = s => s.replace(/&lt;/g,"<").replace(/&gt;/g,">")
+                   .replace(/&quot;/g,'"').replace(/&apos;/g,"'").replace(/&amp;/g,"&");
+  const aoa = [];
+  (xml.match(/<row[\s\S]*?<\/row>|<row[^>]*\/>/g) || []).forEach(rx=>{
+    const row = [];
+    (rx.match(/<c [^>]*\/>|<c [^>]*>[\s\S]*?<\/c>/g) || []).forEach(cx=>{
+      const ref = /r="([A-Z]+\d+)"/.exec(cx);
+      const j = ref ? colIndex(ref[1]) : row.length;
+      const t = /t="([^"]+)"/.exec(cx);
+      let v = "";
+      if(t && t[1] === "inlineStr"){
+        v = (cx.match(/<t[^>]*>([\s\S]*?)<\/t>/g) || []).map(x=>x.replace(/<[^>]+>/g,"")).join("");
+      } else {
+        const m = /<v>([\s\S]*?)<\/v>/.exec(cx);
+        v = m ? m[1] : "";
+        if(t && t[1] === "s") v = shared[+v] || "";
+      }
+      row[j] = un(v);
+    });
+    aoa.push(row);
+  });
+  return aoa;
+}
 const MAX = 27;
 const FACES = ["Say","Do"];
-const HEADERS = ["Organization","Coder","Cut-off date","Dimension","Facet",
-                 "Criteria 0-3 (reference)","المعايير (مرجع)",
-                 "Score","Source title","URL","Accessed","Locator","Quotation",
-                 "Finding type","Reasoning"];
+const FIELDS = ["score","source title","URL","accessed","locator","quotation",
+                "finding type","reasoning"];
+const HEADERS = ["Organization","Coder","Cut-off date","No.","Dimension",
+                 "Say criteria 0-3 (reference)", ...FIELDS.map(f=>"Say "+f),
+                 "Do criteria 0-3 (reference)",  ...FIELDS.map(f=>"Do "+f)];
 const FINDINGS = ["Evidence found","No evidence located","Contrary evidence"];
 
 let SETS = [];            // [{id, org, coder, cutoff, rows:[{dim,face,score,ev,src}], issues:[]}]
@@ -558,19 +779,48 @@ function parseCSV(text){
   return rows;
 }
 
+function critCell(crit){
+  return crit.map((c,i)=>`${i} = ${c[0]}`).join("\n")
+       + "\n\n"
+       + crit.map((c,i)=>`${i} = ${c[1]}`).join("\n");
+}
+
 function templateRows(org, coder, cutoff){
   const out = [HEADERS];
   DIMS.forEach(d=>{
-    FACES.forEach(face=>{
-      const crit = face === "Say" ? d.say : d.do;
-      out.push([org, coder, cutoff,
-        `D${d.n} ${d.en}`, face,
-        crit.map((c,i)=>`${i} = ${c[0]}`).join("  ·  "),
-        crit.map((c,i)=>`${i} = ${c[1]}`).join("  ·  "),
-        "", "", "", "", "", "", "", ""]);
-    });
+    out.push([org, coder, cutoff, d.n, `D${d.n} ${d.en}`,
+      critCell(d.say), "", "", "", "", "", "", "", "",
+      critCell(d.do),  "", "", "", "", "", "", "", ""]);
   });
   return out;
+}
+
+/* the same table as a styled Excel sheet */
+const COLW = [16,14,13,5,30, 56,7,20,26,12,11,34,19,34, 56,7,20,26,12,11,34,19,34];
+const CELLS = [5,5,5,5,3, 12,8,9,9,9,9,9,9,9, 13,10,11,11,11,11,11,11,11];
+
+function formWorkbook(org, coder, cutoff){
+  const rows = [];
+  const band = [{v:"Say–Do Gap Rubric", s:1}];
+  for(let i=1;i<5;i++) band.push({v:"", s:1});
+  band.push({v:"SAY — الإعلان · what the organization states", s:14});
+  for(let i=6;i<14;i++) band.push({v:"", s:14});
+  band.push({v:"DO — الممارسة · what its evidence shows", s:15});
+  for(let i=15;i<23;i++) band.push({v:"", s:15});
+  rows.push({cells:band, h:24});
+  rows.push({cells:HEADERS.map(h=>({v:h, s:2})), h:34});
+  templateRows(org, coder, cutoff).slice(1).forEach(r=>{
+    rows.push({cells:r.map((v,j)=>({v, s:CELLS[j], num: j===3})), h:122});
+  });
+  const merges = ["A1:E1","F1:N1","O1:W1"];
+  const last = rows.length;
+  const valid = [
+    {sqref:`G3:G${last}`, list:"0,1,2,3"},
+    {sqref:`P3:P${last}`, list:"0,1,2,3"},
+    {sqref:`M3:M${last}`, list:FINDINGS.join(",")},
+    {sqref:`V3:V${last}`, list:FINDINGS.join(",")}
+  ];
+  return buildXlsx(sheetXml(rows, COLW.map(w=>({w})), merges, valid, 2));
 }
 
 function downloadForm(){
@@ -578,11 +828,11 @@ function downloadForm(){
   const coder = document.getElementById("f-coder").value.trim() || "Coder";
   const cutoff = document.getElementById("f-cutoff").value || "";
   const safe = (org + "_" + coder).replace(/[^A-Za-z0-9_\-]+/g, "_");
-  const blob = new Blob([toCSV(templateRows(org, coder, cutoff))],
-                        {type:"text/csv;charset=utf-8"});
+  const blob = new Blob([formWorkbook(org, coder, cutoff)],
+    {type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = url; a.download = `say-do_${safe}.csv`;
+  a.href = url; a.download = `say-do_${safe}.xlsx`;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(url), 2000);
   const m = document.getElementById("f-msg");
@@ -599,67 +849,95 @@ const dimIndexOf = txt => {
 };
 
 function readForm(text, filename){
-  const aoa = parseCSV(text).filter(r=>r.some(c=>norm(c)));
+  return readAoa(parseCSV(text), filename);
+}
+
+function readAoa(table, filename){
+  let aoa = table.filter(r=>r.some(c=>norm(c)));
   if(!aoa.length) throw new Error("The file is empty.");
+
+  /* the header row is wherever "Dimension" is */
+  const hi = aoa.findIndex(r=>r.some(c=>norm(c).toLowerCase().startsWith("dimension")));
+  if(hi < 0) throw new Error("This file does not look like the form: the Dimension column is missing.");
+  aoa = aoa.slice(hi);
 
   const head = aoa[0].map(x=>norm(x).toLowerCase());
   const col = key => head.findIndex(h=>h.startsWith(key));
   const cOrg = col("organization"), cCoder = col("coder"), cCut = col("cut-off"),
-        cDim = col("dimension"), cFace = col("facet") >= 0 ? col("facet") : col("face"),
-        cScore = col("score"), cTitle = col("source title"), cUrl = col("url"),
-        cAcc = col("accessed"), cLoc = col("locator"), cQuote = col("quotation"),
-        cFind = col("finding"), cWhy = col("reasoning");
-  if(cDim < 0 || cFace < 0 || cScore < 0)
-    throw new Error("This file does not look like the form: the Dimension, Face or Score column is missing.");
+        cDim = col("dimension"), cFace = col("facet") >= 0 ? col("facet") : col("face");
+  if(cDim < 0) throw new Error("This file does not look like the form: the Dimension column is missing.");
+
+  /* one row per dimension, the two faces side by side; a file downloaded
+     before this layout carries a Facet column and one face per row. */
+  const wide = cFace < 0;
+  const pick = (face, key) => {
+    const k = (wide ? face.toLowerCase() + " " : "") + key;
+    return head.findIndex(h=>h.startsWith(k));
+  };
+  const CC = {};
+  FACES.forEach(f=>{
+    CC[f] = {score:pick(f,"score"), title:pick(f,"source title"), url:pick(f,"url"),
+             acc:pick(f,"accessed"), loc:pick(f,"locator"), quote:pick(f,"quotation"),
+             find:pick(f,"finding"), why:pick(f,"reasoning")};
+  });
+  if(CC.Say.score < 0 || CC.Do.score < 0)
+    throw new Error("This file does not look like the form: a Score column is missing.");
 
   const rows = [], issues = [], seen = {};
   let org = "", coder = "", cutoff = "";
   aoa.slice(1).forEach((r, n)=>{
-    const line = n + 2;
-    if(!norm(r[cDim]) && !norm(r[cFace])) return;
+    const line = n + 2 + hi;
+    if(!norm(r[cDim])) return;
     org    = org    || norm(r[cOrg]);
     coder  = coder  || norm(r[cCoder]);
     cutoff = cutoff || norm(r[cCut]);
 
     const di = dimIndexOf(r[cDim]);
-    const face = /^do/i.test(norm(r[cFace])) ? "Do"
-               : /^say/i.test(norm(r[cFace])) ? "Say" : "";
-    if(di < 0 || di > 8 || !face){
-      issues.push({line, why:"The dimension or face could not be read.",
-                   ar:"تعذّرت قراءة البُعد أو الوجه."});
+    if(di < 0 || di > 8){
+      issues.push({line, why:"The dimension could not be read.",
+                   ar:"تعذّرت قراءة البُعد."});
       return;
     }
-    const tag = `D${di+1} ${face}`;
-    const raw = norm(r[cScore]);
-    const title = norm(r[cTitle]), url = norm(r[cUrl]), acc = norm(r[cAcc]),
-          loc = norm(r[cLoc]), quote = norm(r[cQuote]),
-          find = norm(r[cFind]), why = norm(r[cWhy]);
-    if(raw === ""){ issues.push({line, why:`${tag}: no score.`, ar:"لم تُسجَّل درجة."}); return; }
-    const s = Number(raw);
-    if(!Number.isInteger(s) || s < 0 || s > 3){
-      issues.push({line, why:`${tag}: the score must be 0, 1, 2 or 3.`,
-                   ar:"يجب أن تكون الدرجة ٠ أو ١ أو ٢ أو ٣."}); return;
+    const faces = wide ? FACES
+      : [/^do/i.test(norm(r[cFace])) ? "Do" : /^say/i.test(norm(r[cFace])) ? "Say" : ""];
+    if(!faces[0]){
+      issues.push({line, why:"The face could not be read.", ar:"تعذّرت قراءة الوجه."});
+      return;
     }
-    const fnd = FINDINGS.find(f=>f.toLowerCase().startsWith(find.toLowerCase().slice(0,6)) && find);
-    if(!fnd){
-      issues.push({line, why:`${tag}: the finding type must be one of — ${FINDINGS.join(" / ")}.`,
-                   ar:"يجب أن يكون نوع النتيجة أحد الخيارات الثلاثة المذكورة في الفورم."}); return;
-    }
-    if(!why){
-      issues.push({line, why:`${tag}: no reasoning. Every decision records why this level and not the one above or below.`,
-                   ar:"بلا تسبيب. يُسجَّل لكل قرار سبب اختيار هذا المستوى دون ما فوقه أو دونه."}); return;
-    }
-    if(s > 0 && (!title || !url || !quote || !acc)){
-      issues.push({line, why:`${tag}: a score above zero requires a source title, a URL, the date it was accessed, and the quotation it rests on.`,
-                   ar:"تتطلب الدرجة فوق الصفر عنوان المصدر ورابطه وتاريخ الاطّلاع عليه والاقتباس الذي تستند إليه."}); return;
-    }
-    if(seen[tag]){
-      issues.push({line, why:`${tag}: this cell is filled in more than once.`,
-                   ar:"الخلية مكررة."}); return;
-    }
-    seen[tag] = 1;
-    rows.push({dim:di, face, score:s, title, url, acc, loc, quote,
-               finding:fnd, why});
+
+    faces.forEach(face=>{
+      const c = CC[face], g = k => norm(r[c[k]]);
+      const tag = `D${di+1} ${face}`;
+      const raw = g("score");
+      const title = g("title"), url = g("url"), acc = g("acc"),
+            loc = g("loc"), quote = g("quote"), find = g("find"), why = g("why");
+      if(raw === ""){ issues.push({line, why:`${tag}: no score.`, ar:"لم تُسجَّل درجة."}); return; }
+      const s = Number(raw);
+      if(!Number.isInteger(s) || s < 0 || s > 3){
+        issues.push({line, why:`${tag}: the score must be 0, 1, 2 or 3.`,
+                     ar:"يجب أن تكون الدرجة ٠ أو ١ أو ٢ أو ٣."}); return;
+      }
+      const fnd = FINDINGS.find(f=>f.toLowerCase().startsWith(find.toLowerCase().slice(0,6)) && find);
+      if(!fnd){
+        issues.push({line, why:`${tag}: the finding type must be one of — ${FINDINGS.join(" / ")}.`,
+                     ar:"يجب أن يكون نوع النتيجة أحد الخيارات الثلاثة المذكورة في النموذج."}); return;
+      }
+      if(!why){
+        issues.push({line, why:`${tag}: no reasoning. Every decision records why this level and not the one above or below.`,
+                     ar:"بلا تسبيب. يُسجَّل لكل قرار سبب اختيار هذا المستوى دون ما فوقه أو دونه."}); return;
+      }
+      if(s > 0 && (!title || !url || !quote || !acc)){
+        issues.push({line, why:`${tag}: a score above zero requires a source title, a URL, the date it was accessed, and the quotation it rests on.`,
+                     ar:"تتطلب الدرجة فوق الصفر عنوان المصدر ورابطه وتاريخ الاطّلاع عليه والاقتباس الذي تستند إليه."}); return;
+      }
+      if(seen[tag]){
+        issues.push({line, why:`${tag}: this cell is filled in more than once.`,
+                     ar:"الخلية مكررة."}); return;
+      }
+      seen[tag] = 1;
+      rows.push({dim:di, face, score:s, title, url, acc, loc, quote,
+                 finding:fnd, why});
+    });
   });
 
   return {id:++SEQ, file:filename, org:org||"—", coder:coder||"—", cutoff, rows, issues};
@@ -671,16 +949,27 @@ function addFiles(list){
   let done = 0;
   const finish = ()=>{ if(++done === files.length){ PAIR = [0, SETS.length>1?1:0]; render(); } };
   files.forEach(file=>{
+    const fail = msg => SETS.push({id:++SEQ, file:file.name, org:"—", coder:"—", cutoff:"",
+                                   rows:[], issues:[{line:"—", why:msg,
+                                                     ar:"تعذّرت قراءة الملف."}]});
     const fr = new FileReader();
-    fr.onload = () => {
-      try{ SETS.push(readForm(String(fr.result), file.name)); }
-      catch(err){ SETS.push({id:++SEQ, file:file.name, org:"—", coder:"—", cutoff:"",
-                             rows:[], issues:[{line:"—", why:err.message,
-                                               ar:"تعذّرت قراءة الملف."}]}); }
-      finish();
-    };
-    fr.onerror = finish;
-    fr.readAsText(file, "utf-8");
+    if(/\.xlsx$/i.test(file.name)){
+      fr.onload = async () => {
+        try{ SETS.push(readAoa(await readXlsx(fr.result), file.name)); }
+        catch(err){ fail(err.message); }
+        finish();
+      };
+      fr.onerror = finish;
+      fr.readAsArrayBuffer(file);
+    } else {
+      fr.onload = () => {
+        try{ SETS.push(readForm(String(fr.result), file.name)); }
+        catch(err){ fail(err.message); }
+        finish();
+      };
+      fr.onerror = finish;
+      fr.readAsText(file, "utf-8");
+    }
   });
 }
 
@@ -760,7 +1049,7 @@ function renderStart(){
     <div class="drop" id="drop">
       <div class="big">Choose files, or drag them here</div>
       <div class="ar">تُختار الملفات أو تُسحَب إلى هذا الموضع</div>
-      <input type="file" id="files" multiple accept=".csv,text/csv" hidden>
+      <input type="file" id="files" multiple accept=".xlsx,.csv" hidden>
     </div>
     <div style="margin-top:14px">${sets || `<p class="note">No file uploaded yet.
       <em>لم يُرفَع ملف بعد.</em></p>`}</div>${cutWarn}
