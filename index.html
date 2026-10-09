@@ -1511,11 +1511,37 @@ const stripTags = s => s.replace(/<script[\s\S]*?<\/script>/gi," ")
 const squash = s => s.replace(/ /g," ").replace(/[ \t]+/g," ")
                      .replace(/\n{3,}/g,"\n\n").trim();
 
+/* split a block into readable passages: by sentence where there are sentences,
+   and by a hard cut where there are none (tables, award lists, figure captions) */
+const MAXLEN = 460;
+function chunks(text){
+  const out = [];
+  const flushLong = str => {
+    const words = str.split(/\s+/);
+    let cur = "";
+    words.forEach(w=>{
+      if((cur + " " + w).trim().length > MAXLEN){ out.push(cur.trim()); cur = w; }
+      else cur = (cur + " " + w).trim();
+    });
+    if(cur.trim()) out.push(cur.trim());
+  };
+  squash(text).split(/(?<=[.!?\u061F\u06D4])\s+(?=[A-Z\u0600-\u06FF])/)
+    .reduce((acc,sent)=>{
+      if(!acc.length || (acc[acc.length-1] + " " + sent).length > MAXLEN) acc.push(sent);
+      else acc[acc.length-1] += " " + sent;
+      return acc;
+    }, [])
+    .forEach(c=>{ c = c.trim();
+      if(c.length > MAXLEN * 1.4) flushLong(c); else if(c) out.push(c); });
+  return out.filter(t=>t.length >= 40);
+}
+
 function paragraphs(text, label){
-  return squash(text).split(/\n\s*\n/)
-    .map(t=>t.replace(/\s+/g," ").trim())
-    .filter(t=>t.length >= 40)
-    .map((t,i)=>({loc:`${label} ${i+1}`, text:t}));
+  const segs = [];
+  squash(text).split(/\n\s*\n/).forEach(block=>{
+    chunks(block).forEach(t=>segs.push({loc:`${label} ${segs.length+1}`, text:t}));
+  });
+  return segs;
 }
 
 async function readPdf(buf, name){
@@ -1529,14 +1555,7 @@ async function readPdf(buf, name){
     const page = await pdf.getPage(p);
     const tc = await page.getTextContent();
     const txt = squash(tc.items.map(i=>i.str).join(" "));
-    txt.split(/(?<=[.!?؟۔])\s+(?=[A-Z؀-ۿ])/)
-       .reduce((acc,s)=>{  // group short sentences into readable passages
-         if(!acc.length || (acc[acc.length-1] + " " + s).length > 420) acc.push(s);
-         else acc[acc.length-1] += " " + s;
-         return acc;
-       }, [])
-       .filter(t=>t.trim().length >= 40)
-       .forEach(t=>segs.push({loc:`p. ${p}`, text:t.trim()}));
+    chunks(txt).forEach(t=>segs.push({loc:`p. ${p}`, text:t}));
   }
   return {name, segments:segs};
 }
@@ -1696,10 +1715,8 @@ function renderAnalyse(){
     <div style="margin-top:14px">${docList}</div>
     ${DOCS.length ? `<div class="row" style="margin-top:14px;align-items:center">
       <button class="btn ${AIONLY?"primary":""}" id="aitoggle">${AIONLY
-        ? "Showing passages that name AI — تُعرض المقاطع التي تذكر الذكاء الاصطناعي"
-        : "Showing every passage — تُعرض كل المقاطع"}</button>
-      <span class="note">A passage that does not name AI cannot carry a cell above level 1.
-        <em>المقطع الذي لا يذكر الذكاء الاصطناعي لا يرفع الخانة فوق المستوى الأول.</em></span>
+        ? "\u2713  AI only — الذكاء الاصطناعي فقط"
+        : "All passages — كل المقاطع"}</button>
     </div>` : ""}
     <details style="margin-top:14px">
       <summary class="note" style="cursor:pointer">Or paste the text — أو الصق النص</summary>
