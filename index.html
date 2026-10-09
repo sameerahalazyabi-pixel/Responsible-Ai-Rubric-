@@ -212,6 +212,7 @@ td.num{font-family:var(--f-num);font-variant-numeric:tabular-nums;text-align:cen
 .chip.d{background:var(--do-soft);color:var(--do)}
 .chip.s{background:var(--say-soft);color:var(--say)}
 .chip.g{background:#F6EFE2;color:#8A5A00}
+mark{background:#EDE4FB;color:inherit;border-radius:3px;padding:0 2px;font-weight:600}
 .b-do{background:var(--do-soft);color:var(--do)}
 .b-say{background:var(--say-soft);color:var(--say)}
 .btn.mini{padding:4px 10px;font-size:11px;margin-inline-start:auto}
@@ -1609,6 +1610,18 @@ function addPasted(){
   render();
 }
 
+/* mark the matched dimension terms inside the passage */
+const rxEsc = t => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function hl(text, terms){
+  const safe = esc(text);
+  if(!terms || !terms.length) return safe;
+  const list = terms.slice().sort((a,b)=>b.length-a.length).map(rxEsc);
+  let re;
+  try{ re = new RegExp("(" + list.join("|") + ")", "gi"); }
+  catch(e){ return safe; }
+  return safe.replace(re, m => "<mark>" + m + "</mark>");
+}
+
 function renderAnalyse(){
   const el = document.getElementById("t-analyse");
   const docList = DOCS.map((d,i)=>`<div class="setrow">
@@ -1642,7 +1655,7 @@ function renderAnalyse(){
           <button class="btn mini" data-copy="${esc(p.text).slice(0,0)}"
             data-copytext="${esc(p.text)}">Copy — نسخ</button>
         </div>
-        <p class="quote">${esc(p.text)}</p>
+        <p class="quote">${hl(p.text, p.terms)}</p>
         <div class="sigs">
           ${chips(p.terms.slice(0,4), "t")}
           ${chips(p.doSig, "d")}
