@@ -1675,21 +1675,22 @@ function renderAnalyse(){
             data-copytext="${esc(p.text)}">Copy — نسخ</button>
         </div>
         <p class="quote">${hl(p.text, p.terms)}</p>
-        <div class="sigs">
-          ${chips(p.terms.slice(0,4), "t")}
-          ${chips(p.doSig, "d")}
-          ${chips(p.saySig, "s")}
-        </div>
       </div>`).join("");
     return `<div class="card">
       <h3>D${d.n} · ${esc(d.en)}</h3>
       <div class="arh">${esc(d.ar)}</div>
-      <div class="lgd" style="margin-bottom:14px">
-        <span><strong>${nAI}</strong>&nbsp;name AI — تذكر الذكاء الاصطناعي</span>
-        <span style="color:var(--do)"><strong>${nDo}</strong>&nbsp;Do candidates</span>
-        <span style="color:var(--say)"><strong>${nSay}</strong>&nbsp;Say candidates</span>
-        <span>of&nbsp;<strong>${h.passages.length}</strong>&nbsp;passages — من أصل</span>
-      </div>
+      <p class="note" style="margin-bottom:14px">
+        ${AIONLY
+          ? `Showing the <strong>${nAI}</strong> passages that name AI, of ${h.passages.length} found.`
+          : `Showing all <strong>${h.passages.length}</strong> passages found.`}
+        <strong style="color:var(--do)">${nDo}</strong> read as practice,
+        <strong style="color:var(--say)">${nSay}</strong> as declaration,
+        ${shown.length - nDo - nSay} mixed.
+        <em>${AIONLY
+          ? `تُعرض ${nAI} مقاطع تذكر الذكاء الاصطناعي من ${h.passages.length} مقطعاً.`
+          : `تُعرض المقاطع كلها، وعددها ${h.passages.length}.`}
+        منها ${nDo} تُقرأ ممارسةً و${nSay} إعلاناً و${shown.length - nDo - nSay} مختلطة.</em>
+      </p>
       ${shown.length ? rows : `<p class="note">${AIONLY
         ? `None of the ${h.passages.length} passages for this dimension names AI.
            <em>لا يذكر الذكاء الاصطناعي أيٌّ من مقاطع هذا البُعد.</em>`
