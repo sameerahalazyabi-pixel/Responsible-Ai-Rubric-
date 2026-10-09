@@ -211,6 +211,7 @@ td.num{font-family:var(--f-num);font-variant-numeric:tabular-nums;text-align:cen
 .chip.t{background:var(--surface-3);color:var(--ink-2)}
 .chip.d{background:var(--do-soft);color:var(--do)}
 .chip.s{background:var(--say-soft);color:var(--say)}
+.chip.g{background:#F6EFE2;color:#8A5A00}
 .b-do{background:var(--do-soft);color:var(--do)}
 .b-say{background:var(--say-soft);color:var(--say)}
 .btn.mini{padding:4px 10px;font-size:11px;margin-inline-start:auto}
@@ -1308,6 +1309,7 @@ document.addEventListener("click", e=>{
   if(e.target.closest("#adrop")){ document.getElementById("afiles").click(); return; }
   if(e.target.id === "a-add"){ addPasted(); return; }
   if(e.target.id === "getrules"){ rulesCSV(); return; }
+  if(e.target.id === "aitoggle"){ AIONLY = !AIONLY; renderAnalyse(); return; }
   const dd = e.target.closest("[data-docdel]");
   if(dd){ DOCS.splice(+dd.dataset.docdel,1); HITS = DOCS.length ? buildIndex() : null;
           render(); return; }
@@ -1538,6 +1540,10 @@ async function readPdf(buf, name){
   return {name, segments:segs};
 }
 
+/* does the passage name AI at all? only such passages can carry a cell above level 1 */
+const AI_RE = /\bAI\b|artificial intelligence|machine learning|\bLLMs?\b|\bVLMs?\b|generative|model card|AI model|foundation model|algorithm|deep ?fake|prompt injection|agentic|chatbot|\u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064a|\u062a\u0639\u0644\u0645 \u0627\u0644\u0622\u0644\u0629|\u0627\u0644\u062e\u0648\u0627\u0631\u0632\u0645\u064a|\u0646\u0645\u0627\u0630\u062c \u0644\u063a\u0648\u064a\u0629/i;
+let AIONLY = true;
+
 function fired(list, text){
   return list.filter(([,re])=>re.test(text)).map(([label])=>label);
 }
@@ -1556,12 +1562,14 @@ function buildIndex(){
         const s = fired(SAY_SIGNALS, seg.text);
         const verdict = d.length > s.length ? "do" : s.length > d.length ? "say" : "both";
         out[i].passages.push({doc:doc.name, loc:seg.loc, text:seg.text,
-                              terms:matched, doSig:d, saySig:s, verdict});
+                              terms:matched, doSig:d, saySig:s, verdict,
+                              ai: AI_RE.test(seg.text)});
       });
     });
   });
   // the clearest evidence first
   out.forEach(o=>o.passages.sort((a,b)=>
+    (b.ai - a.ai) ||
     (b.doSig.length + b.saySig.length) - (a.doSig.length + a.saySig.length)));
   return out;
 }
@@ -1621,13 +1629,16 @@ function renderAnalyse(){
 
   const body = !HITS ? "" : HITS.map(h=>{
     const d = DIMS[h.n-1];
-    const nDo = h.passages.filter(p=>p.verdict==="do").length;
-    const nSay = h.passages.filter(p=>p.verdict==="say").length;
-    const rows = h.passages.slice(0,40).map(p=>`
+    const nAI = h.passages.filter(p=>p.ai).length;
+    const shown = AIONLY ? h.passages.filter(p=>p.ai) : h.passages;
+    const nDo = shown.filter(p=>p.verdict==="do").length;
+    const nSay = shown.filter(p=>p.verdict==="say").length;
+    const rows = shown.slice(0,40).map(p=>`
       <div class="pass">
         <div class="pass-head">
           ${pill(p.verdict)}
           <span class="src">${esc(p.doc)} · ${esc(p.loc)}</span>
+          ${p.ai ? "" : `<span class="chip g">general — عام</span>`}
           <button class="btn mini" data-copy="${esc(p.text).slice(0,0)}"
             data-copytext="${esc(p.text)}">Copy — نسخ</button>
         </div>
@@ -1642,14 +1653,18 @@ function renderAnalyse(){
       <h3>D${d.n} · ${esc(d.en)}</h3>
       <div class="arh">${esc(d.ar)}</div>
       <div class="lgd" style="margin-bottom:14px">
-        <span><strong>${h.passages.length}</strong>&nbsp;passages — مقطعاً</span>
+        <span><strong>${nAI}</strong>&nbsp;name AI — تذكر الذكاء الاصطناعي</span>
         <span style="color:var(--do)"><strong>${nDo}</strong>&nbsp;Do candidates</span>
         <span style="color:var(--say)"><strong>${nSay}</strong>&nbsp;Say candidates</span>
+        <span>of&nbsp;<strong>${h.passages.length}</strong>&nbsp;passages — من أصل</span>
       </div>
-      ${h.passages.length ? rows : `<p class="note">Nothing in these documents mentions this dimension.
-        <em>لا شيء في هذه الوثائق يتناول هذا البُعد.</em></p>`}
-      ${h.passages.length > 40 ? `<p class="note">Showing the 40 passages with the most signals,
-        of ${h.passages.length}.<em>تُعرض أربعون مقطعاً بأكثر الإشارات من أصل ${h.passages.length}.</em></p>` : ""}
+      ${shown.length ? rows : `<p class="note">${AIONLY
+        ? `None of the ${h.passages.length} passages for this dimension names AI.
+           <em>لا يذكر الذكاء الاصطناعي أيٌّ من مقاطع هذا البُعد.</em>`
+        : `Nothing in these documents mentions this dimension.
+           <em>لا شيء في هذه الوثائق يتناول هذا البُعد.</em>`}</p>`}
+      ${shown.length > 40 ? `<p class="note">Showing the 40 passages with the most signals,
+        of ${shown.length}.<em>تُعرض أربعون مقطعاً بأكثر الإشارات من أصل ${shown.length}.</em></p>` : ""}
       ${h.passages.length ? aiBlock(h.n) : ""}
     </div>`;
   }).join("");
@@ -1666,6 +1681,13 @@ function renderAnalyse(){
     </div>
     <span class="note" id="a-msg"></span>
     <div style="margin-top:14px">${docList}</div>
+    ${DOCS.length ? `<div class="row" style="margin-top:14px;align-items:center">
+      <button class="btn ${AIONLY?"primary":""}" id="aitoggle">${AIONLY
+        ? "Showing passages that name AI — تُعرض المقاطع التي تذكر الذكاء الاصطناعي"
+        : "Showing every passage — تُعرض كل المقاطع"}</button>
+      <span class="note">A passage that does not name AI cannot carry a cell above level 1.
+        <em>المقطع الذي لا يذكر الذكاء الاصطناعي لا يرفع الخانة فوق المستوى الأول.</em></span>
+    </div>` : ""}
     <details style="margin-top:14px">
       <summary class="note" style="cursor:pointer">Or paste the text — أو الصق النص</summary>
       <div class="row" style="margin-top:10px">
