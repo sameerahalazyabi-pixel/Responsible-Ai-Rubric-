@@ -838,6 +838,17 @@ function downloadForm(){
 
 /* ===================== READING A FILLED FORM ===================== */
 const norm = s => String(s==null?"":s).trim();
+
+/* Excel keeps a date as a serial number counted from 1900. A cell typed as a
+   date therefore arrives as "46303" rather than "2026-10-08". */
+function asDate(v){
+  const s = norm(v);
+  if(!/^\d{5}(\.\d+)?$/.test(s)) return s;
+  const n = Math.floor(Number(s));
+  if(n < 20000 || n > 80000) return s;
+  const d = new Date(Date.UTC(1899, 11, 30) + n * 86400000);
+  return d.toISOString().slice(0, 10);
+}
 const dimIndexOf = txt => {
   const m = /^D\s*([1-9])\b/i.exec(norm(txt));
   if(m) return +m[1] - 1;
@@ -886,7 +897,7 @@ function readAoa(table, filename){
     if(!norm(r[cDim])) return;
     org    = org    || norm(r[cOrg]);
     coder  = coder  || norm(r[cCoder]);
-    cutoff = cutoff || norm(r[cCut]);
+    cutoff = cutoff || asDate(r[cCut]);
 
     const di = dimIndexOf(r[cDim]);
     if(di < 0 || di > 8){
@@ -905,7 +916,7 @@ function readAoa(table, filename){
       const c = CC[face], g = k => norm(r[c[k]]);
       const tag = `D${di+1} ${face}`;
       const raw = g("score");
-      const title = g("title"), url = g("url"), acc = g("acc"),
+      const title = g("title"), url = g("url"), acc = asDate(r[c.acc]),
             loc = g("loc"), quote = g("quote"), why = g("why");
       if(raw === ""){ issues.push({line, why:`${tag}: no score.`, ar:"لم تُسجَّل درجة."}); return; }
       const s = Number(raw);
