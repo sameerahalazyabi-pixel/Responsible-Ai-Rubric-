@@ -1127,22 +1127,32 @@ function renderResults(){
     <h3>Results</h3><div class="arh">النتائج لكل ملف مرفوع</div>
     <div class="scroll"><table>
       <tr><th>Organization · coder <div class="ar">المنظمة · المُرمِّز</div></th>
-          <th style="color:var(--say)">Σ Say</th><th style="color:var(--do)">Σ Do</th>
-          <th>Gap<sub>abs</sub></th><th>Gap<sub>rel</sub></th>
+          <th style="color:var(--say)">Σ Say<div class="ar">ما تُعلنه · من ٢٧</div></th>
+          <th style="color:var(--do)">Σ Do<div class="ar">ما تُثبته · من ٢٧</div></th>
+          <th>Gap<sub>abs</sub><div class="ar">الفجوة المطلقة</div></th>
+          <th>Gap<sub>rel</sub><div class="ar">الفجوة النسبية</div></th>
           <th>Band <div class="ar">النطاق</div></th></tr>
       ${tbl}</table></div>
+    <p class="note" style="margin-top:12px">Σ Say is the total declared and Σ Do the total evidenced, each out of 27.
+      Gap<sub>abs</sub> expresses the distance between them as a share of the full scale; Gap<sub>rel</sub> expresses it as a share of the declaration itself.
+      <em>مجموع الإعلان ومجموع الممارسة، كلٌّ منهما من سبعٍ وعشرين. وتُنسَب الفجوة المطلقة إلى المقياس كاملاً، وتُنسَب النسبية إلى الإعلان وحده، فتدلّ على ما أُعلن ولم يقم عليه دليل.</em></p>
   </div>
   <div class="card">
     <h3>Declaration against practice</h3>
     <div class="arh">القول والفعل على المقياس ذاته</div>
     <div class="lgd">
-      <span><i style="background:var(--say)"></i>Σ Say — القول</span>
-      <span><i style="background:var(--do)"></i>Σ Do — الفعل</span></div>
+      <span><i style="background:var(--say)"></i>Σ Say — ما تُعلنه</span>
+      <span><i style="background:var(--do)"></i>Σ Do — ما تُثبته</span></div>
     <div class="chart">${bars}</div>
+    <p class="note" style="margin-top:10px">The two faces are drawn on one scale: the distance by which the practice bar falls short of the declaration bar is the gap.
+      <em>الوجهان على مقياسٍ واحد، والمسافة التي يقصُر بها شريط الممارسة عن شريط الإعلان هي الفجوة.</em></p>
   </div>
   <div class="card">
     <h3>Gap by dimension</h3>
     <div class="arh">الفجوة في كل بُعد</div>
+    <p class="note" style="margin-bottom:12px">Each row is one dimension, and the figure is the declaration level less the practice level.
+      Zero records correspondence, a positive figure a declaration that the evidence does not reach, and a negative figure practice that the declaration does not claim.
+      <em>كل سطرٍ بُعدٌ واحد، والرقم فيه درجة الإعلان منقوصاً منها درجة الممارسة. فالصفر تطابقٌ بينهما، والموجب إعلانٌ لم يبلغه الدليل، والسالب ممارسةٌ لم يَدَّعِها الإعلان.</em></p>
     ${matrix}
   </div>
   <div class="card">
