@@ -2003,21 +2003,29 @@ function semBlock(n){
   const t = TERMS[i];
   const gate = text => { const low = text.toLowerCase();
     return t.en.some(w=>low.includes(w)) || t.ar.some(w=>text.includes(w)); };
-  const say = semRank(SEM.dimQ, (2*i) * SEM_DIM, AIONLY, 3, null, gate);
-  const doo = semRank(SEM.dimQ, (2*i+1) * SEM_DIM, AIONLY, 3, null, gate);
-  if(!say.length && !doo.length)
+  /* each passage appears once, under the face whose criteria it is closer to */
+  const say = semRank(SEM.dimQ, (2*i) * SEM_DIM, AIONLY, 999, null, gate);
+  const doo = semRank(SEM.dimQ, (2*i+1) * SEM_DIM, AIONLY, 999, null, gate);
+  const key = p => p.doc + "|" + p.loc + "|" + p.text;
+  const dSim = new Map(doo.map(p=>[key(p), p.sim]));
+  const sayList = [], doList = [];
+  say.forEach(p=>{ const d = dSim.get(key(p));
+    if(p.sim >= d) sayList.push(p); else doList.push({...p, sim:d}); });
+  doList.sort((a,b)=>b.sim - a.sim);
+  const head = `<strong style="font-size:13px">Relevant passages — المقاطع ذات الصلة</strong>`;
+  if(!say.length)
     return `<div style="margin:0 0 16px;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2)">
-      <strong style="font-size:13px">AI picks for this dimension — اختيارات الذكاء الاصطناعي لهذا البُعد</strong>
+      ${head}
       <p class="note" style="margin:6px 0 0">No passage in these documents addresses this dimension.
         <em>لا يتناول هذا البُعدَ أيُّ مقطعٍ في هذه الوثائق.</em></p></div>`;
-  const list = arr => arr.length ? arr.map(semPass).join("")
-    : `<p class="note">None.<em>لا شيء.</em></p>`;
+  const list = arr => arr.length ? arr.slice(0,3).map(semPass).join("")
+    : `<p class="note">No passage.<em>لا مقاطع.</em></p>`;
   return `<details open style="display:block;margin:0 0 16px;padding:12px 14px;border:1px solid var(--say);border-radius:10px;background:var(--say-soft)">
-    <summary style="cursor:pointer;font-size:13px;font-weight:600">AI picks for this dimension — اختيارات الذكاء الاصطناعي لهذا البُعد</summary>
-    <p class="note" style="margin:10px 0 8px;color:var(--say)"><strong>Closest to the Say criteria — الأقرب إلى معايير الإعلان</strong></p>
-    ${list(say)}
-    <p class="note" style="margin:14px 0 8px;color:var(--do)"><strong>Closest to the Do criteria — الأقرب إلى معايير الممارسة</strong></p>
-    ${list(doo)}
+    <summary style="cursor:pointer;margin-bottom:10px">${head}</summary>
+    <p style="margin:6px 0 8px;font-size:12.5px;font-weight:600;color:var(--say)">Say — الإعلان</p>
+    ${list(sayList)}
+    <p style="margin:14px 0 8px;font-size:12.5px;font-weight:600;color:var(--do)">Do — الممارسة</p>
+    ${list(doList)}
   </details>`;
 }
 
