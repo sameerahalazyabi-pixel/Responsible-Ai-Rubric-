@@ -1605,13 +1605,15 @@ function fired(list, text){
 function buildIndex(){
   const out = TERMS.map(t=>({n:t.n, passages:[]}));
   DOCS.forEach(doc=>{
+    /* a page that names a dimension lends it to every passage on that page, so the
+       rows of a table are kept with their heading */
+    const hit = (t, text) => { const low = text.toLowerCase();
+      return t.en.filter(w=>low.includes(w)).concat(t.ar.filter(w=>text.includes(w))); };
+    const pageHas = TERMS.map(t=>new Set(doc.segments.filter(sg=>hit(t, sg.text).length).map(sg=>sg.loc)));
     doc.segments.forEach(seg=>{
-      const low = seg.text.toLowerCase();
       TERMS.forEach((t,i)=>{
-        const hitEn = t.en.filter(w=>low.includes(w));
-        const hitAr = t.ar.filter(w=>seg.text.includes(w));
-        const matched = hitEn.concat(hitAr);
-        if(!matched.length) return;
+        const matched = hit(t, seg.text);
+        if(!matched.length && !pageHas[i].has(seg.loc)) return;
         const d = fired(DO_SIGNALS, seg.text);
         const s = fired(SAY_SIGNALS, seg.text);
         const verdict = d.length > s.length ? "do" : s.length > d.length ? "say" : "both";
