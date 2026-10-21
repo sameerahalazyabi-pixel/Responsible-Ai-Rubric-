@@ -1,3 +1,4 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 <title>Say–Do Gap Rubric</title>
 
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1333,8 +1334,8 @@ document.addEventListener("click", e=>{
   const dd = e.target.closest("[data-docdel]");
   if(dd){ DOCS.splice(+dd.dataset.docdel,1); HITS = DOCS.length ? buildIndex() : null;
           render(); return; }
-  const ask = e.target.closest("[data-ask]");
-  if(ask && !ask.disabled){ askClaude(+ask.dataset.ask); return; }
+  if(e.target.id === "sem-on"){ semStart(); return; }
+  if(e.target.id === "sem-go"){ const q = document.getElementById("sem-q"); if(q) semSearch(q.value); return; }
   const cp = e.target.closest("[data-copytext]");
   if(cp){
     const txt = cp.dataset.copytext;
@@ -1353,6 +1354,10 @@ document.addEventListener("click", e=>{
     try{ navigator.clipboard.writeText(box.value).then(done, fallback); }catch(err){ fallback(); }
     return;
   }
+});
+
+document.addEventListener("keydown", e=>{
+  if(e.key === "Enter" && e.target.id === "sem-q"){ e.preventDefault(); semSearch(e.target.value); }
 });
 
 document.addEventListener("change", e=>{
@@ -1574,7 +1579,7 @@ async function readPdf(buf, name){
     const page = await pdf.getPage(p);
     const tc = await page.getTextContent();
     const txt = squash(tc.items.map(i=>i.str).join(" "));
-    chunks(txt).forEach(t=>segs.push({loc:`p. ${p}`, text:t}));
+    chunks(txt).forEach(t=>segs.push({loc:`PDF p. ${p}`, text:t}));
   }
   return {name, segments:segs};
 }
@@ -1634,6 +1639,7 @@ async function addDocs(list){
   if(msg) msg.textContent = "";
   HITS = buildIndex();
   render();
+  if(EMBED) semIndex();
 }
 
 function addPasted(){
@@ -1646,6 +1652,7 @@ function addPasted(){
   ta.value = "";
   HITS = buildIndex();
   render();
+  if(EMBED) semIndex();
 }
 
 /* mark the matched dimension terms inside the passage */
@@ -1699,16 +1706,8 @@ function renderAnalyse(){
       <h3>D${d.n} · ${esc(d.en)}</h3>
       <div class="arh">${esc(d.ar)}</div>
       <p class="note" style="margin-bottom:14px">
-        ${AIONLY
-          ? `Showing the <strong>${nAI}</strong> passages that name AI, of ${h.passages.length} found.`
-          : `Showing all <strong>${h.passages.length}</strong> passages found.`}
-        <strong style="color:var(--do)">${nDo}</strong> read as practice,
-        <strong style="color:var(--say)">${nSay}</strong> as declaration,
-        ${shown.length - nDo - nSay} mixed.
-        <em>${AIONLY
-          ? `تُعرض ${nAI} مقاطع تذكر الذكاء الاصطناعي من ${h.passages.length} مقطعاً.`
-          : `تُعرض المقاطع كلها، وعددها ${h.passages.length}.`}
-        منها ${nDo} تُقرأ ممارسةً و${nSay} إعلاناً و${shown.length - nDo - nSay} مختلطة.</em>
+        <strong>${shown.length}</strong> passages${AIONLY ? ` mention AI (of ${h.passages.length})` : ""}
+        <em>${shown.length} مقطعاً${AIONLY ? ` تذكر الذكاء الاصطناعي (من ${h.passages.length})` : ""}</em>
       </p>
       ${shown.length ? rows : `<p class="note">${AIONLY
         ? `None of the ${h.passages.length} passages for this dimension names AI.
@@ -1717,7 +1716,7 @@ function renderAnalyse(){
            <em>لا شيء في هذه الوثائق يتناول هذا البُعد.</em>`}</p>`}
       ${shown.length > 40 ? `<p class="note">Showing the 40 passages with the most signals,
         of ${shown.length}.<em>تُعرض أربعون مقطعاً بأكثر الإشارات من أصل ${shown.length}.</em></p>` : ""}
-      ${h.passages.length ? aiBlock(h.n) : ""}
+      ${semBlock(h.n)}
     </div>`;
   }).join("");
 
@@ -1748,6 +1747,7 @@ function renderAnalyse(){
       <textarea id="a-paste" style="min-height:140px" placeholder="Paste the document text here"></textarea>
     </details>
   </div>
+  ${DOCS.length ? searchCard() : ""}
   ${DOCS.length ? body : ""}
   ${DOCS.length ? rulesCard() : ""}`;
 }
@@ -1814,89 +1814,179 @@ function rulesCard(){
   </div>`;
 }
 
-/* ===================== OPTIONAL: ASK CLAUDE =====================
-   Available only where the page runs with the sampling capability. On a plain
-   web host the button is absent and the rule-based reader is unaffected. */
-let SAMPLE = null, SAMPLE_READY = false;
-const AI = {};   // dimension number -> {loading} | {data} | {error}
+/* ===================== SEMANTIC SEARCH (AI, ON THIS DEVICE) =====================
+   A multilingual text-embedding model (multilingual-e5-small, quantized) runs in the
+   browser. It turns every passage and every question into a vector, and ranks passages
+   by closeness of meaning. It retrieves; it never scores. Nothing leaves the device.
+   The same documents and the same question always return the same passages. */
+const SEM_LIB   = "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.0.2";
+const SEM_MODEL = "Xenova/multilingual-e5-small";
+const SEM_DIM   = 384;
+const SEM = {state:"off", pct:0, msg:"", query:"", results:null, err:"", dimQ:null};
+let EMBED = null;
 
-(async ()=>{
-  try{
-    if(typeof window !== "undefined" && window.claude && window.claude.use)
-      SAMPLE = await window.claude.use("sample");
-  }catch(e){ SAMPLE = null; }
-  SAMPLE_READY = true;
-  if(TAB === "analyse") renderAnalyse();
-})();
-
-async function askClaude(n){
-  if(!SAMPLE || !HITS) return;
-  const d = DIMS[n-1];
-  const h = HITS.find(x=>x.n === n);
-  if(!h || !h.passages.length) return;
-  AI[n] = {loading:true};
-  renderAnalyse();
-
-  const crit = ["say","do"].map(f=>
-    (f === "say" ? "SAY criteria (what the organization declares):\n"
-                 : "DO criteria (what a retrievable artifact shows it does):\n") +
-    d[f].map((c,i)=>`${i} = ${c[0]}`).join("\n")).join("\n\n");
-
-  const passages = h.passages.slice(0,14)
-    .map((p,i)=>`[${i+1}] (${p.doc}, ${p.loc}) ${p.text}`).join("\n\n");
-
-  const prompt =
-`You are assisting a content-analysis study that scores an organization on the dimension below, twice: once for what it declares (Say) and once for what published artifacts show it does (Do). Each face is scored 0 to 3 against the stated criteria. Assign the highest level whose criterion is fully satisfied by the passages given. A statement of intention is never Do evidence. If no passage supports a level above 0, say 0.
-
-DIMENSION ${d.n}: ${d.en}
-
-${crit}
-
-PASSAGES RETRIEVED FROM THE ORGANIZATION'S DOCUMENTS:
-
-${passages}
-
-Reply with JSON only, no other text:
-{"say": <0-3>, "sayPassage": <passage number or 0>, "sayWhy": "<one sentence: why this level and not the one above>",
- "do": <0-3>, "doPassage": <passage number or 0>, "doWhy": "<one sentence: why this level and not the one above>"}`;
-
-  try{
-    const r = await SAMPLE.json(prompt, {modelTier:"complex"});
-    AI[n] = {data:r, when:new Date().toISOString().slice(0,16).replace("T"," ")};
-  }catch(err){
-    AI[n] = {error:(err && err.message) || "The request was refused."};
-  }
-  renderAnalyse();
+function semStatus(){
+  if(SEM.state === "loading")  return `Loading the model… ${SEM.pct}% — جارٍ تحميل النموذج`;
+  if(SEM.state === "indexing") return `Reading the passages… ${SEM.pct}% — جارٍ قراءة المقاطع`;
+  if(SEM.state === "ready")    return `Ready — جاهز`;
+  if(SEM.state === "error")    return `AI search did not load (${SEM.err}). Inside claude.ai it is blocked: open the GitHub version. — لم يعمل البحث الذكي. داخل claude.ai يُمنع تحميله: افتحي نسخة GitHub.`;
+  return "";
+}
+function semPaint(){
+  const s = document.getElementById("sem-status");
+  if(s) s.textContent = semStatus();
+  const b = document.getElementById("sem-bar");
+  if(b) b.style.width = (SEM.state === "ready" ? 100 : SEM.pct) + "%";
 }
 
-function aiBlock(n){
-  if(!SAMPLE) return "";
-  const st = AI[n];
-  const btn = `<button class="btn mini" data-ask="${n}" style="margin:0"
-      ${st && st.loading ? "disabled" : ""}>${st && st.loading
-      ? "Reading… — جارٍ القراءة" : "Ask Claude to suggest a score — اطلب اقتراحاً"}</button>`;
-  if(!st || st.loading) return `<div class="airow">${btn}</div>`;
-  if(st.error) return `<div class="airow">${btn}
-    <span class="note" style="color:var(--bad)">${esc(st.error)}</span></div>`;
-  const r = st.data || {};
-  const cell = (face, score, pass, why) => `
-    <div class="aicell">
-      <div class="k">${face}</div>
-      <div class="v" style="color:var(--${face === "Say" ? "say" : "do"})">${esc(String(score))}</div>
-      <div class="n">${pass ? "from passage " + esc(String(pass)) : "no supporting passage"}
-        <em>${esc(why || "")}</em></div>
-    </div>`;
-  return `<div class="airow">${btn}</div>
-    <div class="aibox">
-      <div class="aigrid">
-        ${cell("Say", r.say, r.sayPassage, r.sayWhy)}
-        ${cell("Do", r.do, r.doPassage, r.doWhy)}
+async function semEmbed(texts){
+  const out = await EMBED(texts, {pooling:"mean", normalize:true});
+  return out.data;   // Float32Array, texts.length × SEM_DIM
+}
+
+async function semStart(){
+  if(SEM.state === "loading" || SEM.state === "indexing") return;
+  if(!EMBED){
+    SEM.state = "loading"; SEM.pct = 0; renderAnalyse();
+    try{
+      const lib = window.__SEM_STUB || await import(SEM_LIB);
+      const sizes = {};
+      EMBED = await lib.pipeline("feature-extraction", SEM_MODEL, {
+        dtype:"q8",
+        progress_callback: p=>{
+          if(p && p.status === "progress" && p.file && p.total){
+            sizes[p.file] = [p.loaded, p.total];
+            const v = Object.values(sizes);
+            const got = v.reduce((n,x)=>n+x[0],0), all = v.reduce((n,x)=>n+x[1],0);
+            SEM.pct = all ? Math.min(99, Math.round(got/all*100)) : 0;
+            semPaint();
+          }
+        }});
+    }catch(err){
+      SEM.state = "error"; SEM.err = (err && err.message) || String(err);
+      renderAnalyse(); return;
+    }
+  }
+  if(!SEM.dimQ){
+    const qs = [];
+    DIMS.forEach(d=>{
+      qs.push(`query: artificial intelligence ${d.en}. ${d.say[2][0]} ${d.say[3][0]}`);
+      qs.push(`query: artificial intelligence ${d.en}. ${d.do[2][0]} ${d.do[3][0]}`);
+    });
+    SEM.dimQ = await semEmbed(qs);
+  }
+  await semIndex();
+}
+
+/* embed every passage of every document not yet read */
+async function semIndex(){
+  if(!EMBED) return;
+  const todo = DOCS.filter(d=>!d.vecs && d.segments.length);
+  if(!todo.length){ SEM.state = "ready"; renderAnalyse(); return; }
+  const total = todo.reduce((n,d)=>n+d.segments.length,0);
+  let done = 0;
+  SEM.state = "indexing"; SEM.pct = 0; renderAnalyse();
+  try{
+    for(const doc of todo){
+      const vecs = new Float32Array(doc.segments.length * SEM_DIM);
+      for(let i=0; i<doc.segments.length; i+=8){
+        const batch = doc.segments.slice(i, i+8).map(s=>"passage: " + s.text);
+        vecs.set(await semEmbed(batch), i * SEM_DIM);
+        done += batch.length;
+        SEM.pct = Math.round(done/total*100); semPaint();
+        await new Promise(r=>setTimeout(r, 0));
+      }
+      doc.vecs = vecs;
+    }
+    SEM.state = "ready";
+  }catch(err){
+    SEM.state = "error"; SEM.err = (err && err.message) || String(err);
+  }
+  if(SEM.query) await semSearch(SEM.query, true); else renderAnalyse();
+}
+
+/* rank every passage against one query vector */
+function semRank(q, off, onlyAI, k){
+  const all = [];
+  DOCS.forEach(doc=>{
+    if(!doc.vecs) return;
+    doc.segments.forEach((seg,i)=>{
+      if(onlyAI && !AI_RE.test(seg.text)) return;
+      let s = 0; const b = i * SEM_DIM;
+      for(let j=0;j<SEM_DIM;j++) s += q[off+j] * doc.vecs[b+j];
+      all.push({doc:doc.name, loc:seg.loc, text:seg.text, sim:s});
+    });
+  });
+  all.sort((a,b)=>b.sim - a.sim);
+  return all.slice(0, k);
+}
+
+async function semSearch(text, quiet){
+  SEM.query = text.trim();
+  if(!SEM.query){ SEM.results = null; renderAnalyse(); return; }
+  if(SEM.state !== "ready") return;
+  const q = await semEmbed(["query: " + SEM.query]);
+  SEM.results = semRank(q, 0, false, 8);
+  renderAnalyse();
+  if(!quiet){ const r = document.getElementById("sem-res"); if(r) r.scrollIntoView({block:"nearest"}); }
+}
+
+const semPass = p => `
+  <div class="pass">
+    <div class="pass-head">
+      <span class="src">${esc(p.doc)} · ${esc(p.loc)}</span>
+      <span class="chip t" title="Closeness of meaning, from 0 to 1">similarity ${p.sim.toFixed(2)}</span>
+      <button class="btn mini" data-copytext="${esc(p.text)}">Copy — نسخ</button>
+    </div>
+    <p class="quote">${esc(p.text)}</p>
+  </div>`;
+
+function searchCard(){
+  const on = SEM.state === "ready";
+  const busy = SEM.state === "loading" || SEM.state === "indexing";
+  const res = !SEM.results ? "" : SEM.results.length ? SEM.results.map(semPass).join("")
+    : `<p class="note">No passage found.<em>لم يُعثر على مقطع.</em></p>`;
+  return `<div class="card">
+    <h3>Ask the documents</h3>
+    <div class="arh">اسأل الوثائق — بحثٌ بالمعنى لا بالكلمات</div>
+    ${SEM.state === "off" || SEM.state === "error" ? `
+      <div class="row"><button class="btn primary" id="sem-on">Turn on AI search — تشغيل البحث الذكي</button></div>
+      <p class="note">First time only: downloads about 120 MB. Use Wi-Fi.
+        <em>أول مرة فقط: ينزّل نحو ١٢٠ ميغابايت. استخدمي الواي فاي.</em></p>` : ""}
+    ${SEM.state !== "off" ? `
+      <div class="track" style="height:8px;margin:4px 0 6px"><b id="sem-bar" style="width:${on?100:SEM.pct}%;background:linear-gradient(90deg,var(--say),var(--say-2))"></b></div>
+      <div class="note" id="sem-status" style="${SEM.state==="error"?"color:var(--bad)":""}">${esc(semStatus())}</div>` : ""}
+    ${on || busy ? `
+      <div class="row" style="margin-top:12px">
+        <div class="field" style="flex:1 1 260px"><label for="sem-q">Question <span>السؤال</span></label>
+          <input type="text" id="sem-q" value="${esc(SEM.query)}" ${on?"":"disabled"}
+            placeholder="Does the company publish an AI risk register? — هل تنشر الشركة سجلاً لمخاطر الذكاء الاصطناعي؟"></div>
+        <button class="btn primary" id="sem-go" ${on?"":"disabled"}>Search — بحث</button>
       </div>
-      <p class="note" style="margin:10px 0 0">A suggestion, not a score. It is not reproducible: the same request can return a different answer, so it is never recorded as the study's value. Generated ${esc(st.when || "")}.
-        <em>اقتراح لا درجة. وهو غير قابل للتكرار، إذ قد يعطي الطلب نفسه جواباً مختلفاً، فلا يُسجَّل قيمةً للدراسة.</em></p>
-    </div>`;
+      <div id="sem-res">${res}</div>` : ""}
+  </div>`;
+}
+
+/* under each dimension: the passages closest to its Say and Do criteria */
+function semBlock(n){
+  if(SEM.state !== "ready" || !SEM.dimQ) return "";
+  const i = n - 1;
+  const say = semRank(SEM.dimQ, (2*i) * SEM_DIM, AIONLY, 3);
+  const doo = semRank(SEM.dimQ, (2*i+1) * SEM_DIM, AIONLY, 3);
+  const list = arr => arr.length ? arr.map(semPass).join("")
+    : `<p class="note">None.<em>لا شيء.</em></p>`;
+  return `<details class="airow" style="display:block">
+    <summary style="cursor:pointer;font-size:12.5px;font-weight:600">AI: closest in meaning to the criteria — الذكاء الاصطناعي: الأقرب معنىً إلى المعايير</summary>
+    <p class="note" style="margin:10px 0 8px;color:var(--say)"><strong>Closest to the Say criteria — الأقرب إلى معايير الإعلان</strong></p>
+    ${list(say)}
+    <p class="note" style="margin:14px 0 8px;color:var(--do)"><strong>Closest to the Do criteria — الأقرب إلى معايير الممارسة</strong></p>
+    ${list(doo)}
+    <p class="note" style="margin-top:6px">Retrieved, not scored. — مقاطع مسترجعة، لا درجات.</p>
+  </details>`;
 }
 
 /* every binding is now initialised */
 render();
 </script>
+
+</body></html>
