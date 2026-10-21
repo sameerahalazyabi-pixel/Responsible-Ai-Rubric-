@@ -1749,7 +1749,7 @@ function renderAnalyse(){
   </div>
   ${DOCS.length ? searchCard() : ""}
   ${DOCS.length ? body : ""}
-  ${DOCS.length ? rulesCard() : ""}`;
+`;
 }
 
 function rulesCSV(){
@@ -1915,12 +1915,13 @@ function semWords(t){
   return (t||"").toLowerCase().split(/[^a-z0-9\u0600-\u06ff]+/)
     .filter(w=>w.length > 2 && !STOP.has(w));
 }
-function semRank(q, off, onlyAI, k, words){
+function semRank(q, off, onlyAI, k, words, gate){
   const all = [];
   DOCS.forEach(doc=>{
     if(!doc.vecs) return;
     doc.segments.forEach((seg,i)=>{
       if(seg.text.length < SEM_MINLEN) return;
+      if(gate && !gate(seg.text)) return;
       if(onlyAI && !AI_RE.test(seg.text)) return;
       let s = 0; const b = i * SEM_DIM;
       for(let j=0;j<SEM_DIM;j++) s += q[off+j] * doc.vecs[b+j];
@@ -1985,8 +1986,18 @@ function searchCard(){
 function semBlock(n){
   if(SEM.state !== "ready" || !SEM.dimQ) return "";
   const i = n - 1;
-  const say = semRank(SEM.dimQ, (2*i) * SEM_DIM, AIONLY, 3);
-  const doo = semRank(SEM.dimQ, (2*i+1) * SEM_DIM, AIONLY, 3);
+  /* only passages that name this dimension are ranked: a dimension the documents
+     never mention returns nothing, rather than the least distant unrelated text */
+  const t = TERMS[i];
+  const gate = text => { const low = text.toLowerCase();
+    return t.en.some(w=>low.includes(w)) || t.ar.some(w=>text.includes(w)); };
+  const say = semRank(SEM.dimQ, (2*i) * SEM_DIM, AIONLY, 3, null, gate);
+  const doo = semRank(SEM.dimQ, (2*i+1) * SEM_DIM, AIONLY, 3, null, gate);
+  if(!say.length && !doo.length)
+    return `<div style="margin:0 0 16px;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2)">
+      <strong style="font-size:13px">AI picks for this dimension — اختيارات الذكاء الاصطناعي لهذا البُعد</strong>
+      <p class="note" style="margin:6px 0 0">No passage in these documents addresses this dimension.
+        <em>لا يتناول هذا البُعدَ أيُّ مقطعٍ في هذه الوثائق.</em></p></div>`;
   const list = arr => arr.length ? arr.map(semPass).join("")
     : `<p class="note">None.<em>لا شيء.</em></p>`;
   return `<details open style="display:block;margin:0 0 16px;padding:12px 14px;border:1px solid var(--say);border-radius:10px;background:var(--say-soft)">
