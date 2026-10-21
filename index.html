@@ -1568,6 +1568,35 @@ function paragraphs(text, label){
   return segs;
 }
 
+/* Rebuild table rows from the positions of the text runs, keeping the PDF's own
+   reading order: a wide gap between two runs on the same line becomes " | ", and a
+   line that held such a gap ends with ";". Prose, whose runs sit close together,
+   is left as it was, so quotations stay verbatim. */
+function layoutRuns(items){
+  const out = [];
+  let prev = null, rowHasGap = false;
+  items.forEach(it=>{
+    const str = (it.str || "").trim();
+    if(!str){ return; }
+    const x = it.transform[4], y = it.transform[5];
+    const h = Math.abs(it.transform[3]) || it.height || 10;
+    if(prev){
+      const sameLine = Math.abs(y - prev.y) < h * 0.5;
+      const gap = x - prev.xEnd;
+      if(sameLine && gap > Math.max(14, h * 1.6)){
+        out.push("|"); rowHasGap = true;
+      } else if(!sameLine){
+        if(rowHasGap) out.push(";");
+        rowHasGap = false;
+      }
+    }
+    out.push(str);
+    prev = {y, xEnd: x + (it.width || 0)};
+  });
+  if(rowHasGap) out.push(";");
+  return out;
+}
+
 async function readPdf(buf, name){
   if(typeof pdfjsLib === "undefined")
     throw new Error("PDF reading is unavailable here. Save the document as .txt, or paste its text below.");
@@ -1578,7 +1607,7 @@ async function readPdf(buf, name){
   for(let p=1; p<=pdf.numPages; p++){
     const page = await pdf.getPage(p);
     const tc = await page.getTextContent();
-    pages.push(tc.items.map(i=>i.str.trim()).filter(Boolean));
+    pages.push(layoutRuns(tc.items));
   }
   /* running headers and footers (a report's section menu, its title line) repeat on
      most pages and would match every dimension; a text run found on a third or more
@@ -1588,7 +1617,7 @@ async function readPdf(buf, name){
   const limit = Math.max(4, pages.length / 3);
   const segs = [];
   pages.forEach((items,k)=>{
-    const txt = squash(items.filter(t=>seen[t] < limit || t.length > 80).join(" "));
+    const txt = squash(items.filter(t=>t === "|" || t === ";" || seen[t] < limit || t.length > 80 || !/[A-Za-z\u0600-\u06FF]{2}/.test(t)).join(" ")).replace(/ ;/g, ";");
     chunks(txt).forEach(t=>segs.push({loc:`PDF p. ${k+1}`, text:t}));
   });
   return {name, segments:segs};
