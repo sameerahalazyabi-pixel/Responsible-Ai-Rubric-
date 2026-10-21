@@ -1906,14 +1906,28 @@ async function semIndex(){
 }
 
 /* rank every passage against one query vector */
-function semRank(q, off, onlyAI, k){
+/* Short fragments (running headers, link lists, captions) sit close to every query
+   in this model's space, so they are left out of the ranking. Words of the question
+   found verbatim in a passage add a small bonus. */
+const SEM_MINLEN = 150;
+const STOP = new Set("the and for are does did has have with that this from what which who how its into their there about published publish company organization organisation هل هي هو في من على عن إلى الى ما ماذا كيف التي الذي هذه هذا الشركة المنظمة تنشر".split(" "));
+function semWords(t){
+  return (t||"").toLowerCase().split(/[^a-z0-9\u0600-\u06ff]+/)
+    .filter(w=>w.length > 2 && !STOP.has(w));
+}
+function semRank(q, off, onlyAI, k, words){
   const all = [];
   DOCS.forEach(doc=>{
     if(!doc.vecs) return;
     doc.segments.forEach((seg,i)=>{
+      if(seg.text.length < SEM_MINLEN) return;
       if(onlyAI && !AI_RE.test(seg.text)) return;
       let s = 0; const b = i * SEM_DIM;
       for(let j=0;j<SEM_DIM;j++) s += q[off+j] * doc.vecs[b+j];
+      if(words && words.length){
+        const low = seg.text.toLowerCase();
+        s += 0.03 * words.filter(w=>low.includes(w)).length / words.length;
+      }
       all.push({doc:doc.name, loc:seg.loc, text:seg.text, sim:s});
     });
   });
@@ -1926,7 +1940,7 @@ async function semSearch(text, quiet){
   if(!SEM.query){ SEM.results = null; renderAnalyse(); return; }
   if(SEM.state !== "ready") return;
   const q = await semEmbed(["query: " + SEM.query]);
-  SEM.results = semRank(q, 0, false, 8);
+  SEM.results = semRank(q, 0, false, 8, semWords(SEM.query));
   renderAnalyse();
   if(!quiet){ const r = document.getElementById("sem-res"); if(r) r.scrollIntoView({block:"nearest"}); }
 }
@@ -1935,7 +1949,7 @@ const semPass = p => `
   <div class="pass">
     <div class="pass-head">
       <span class="src">${esc(p.doc)} · ${esc(p.loc)}</span>
-      <span class="chip t" title="Closeness of meaning, from 0 to 1">similarity ${p.sim.toFixed(2)}</span>
+      
       <button class="btn mini" data-copytext="${esc(p.text)}">Copy — نسخ</button>
     </div>
     <p class="quote">${esc(p.text)}</p>
