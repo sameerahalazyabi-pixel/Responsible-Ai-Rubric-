@@ -1574,13 +1574,23 @@ async function readPdf(buf, name){
   pdfjsLib.GlobalWorkerOptions.workerSrc =
     "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
   const pdf = await pdfjsLib.getDocument({data:buf}).promise;
-  const segs = [];
+  const pages = [];
   for(let p=1; p<=pdf.numPages; p++){
     const page = await pdf.getPage(p);
     const tc = await page.getTextContent();
-    const txt = squash(tc.items.map(i=>i.str).join(" "));
-    chunks(txt).forEach(t=>segs.push({loc:`PDF p. ${p}`, text:t}));
+    pages.push(tc.items.map(i=>i.str.trim()).filter(Boolean));
   }
+  /* running headers and footers (a report's section menu, its title line) repeat on
+     most pages and would match every dimension; a text run found on a third or more
+     of the pages is dropped */
+  const seen = {};
+  pages.forEach(items=>new Set(items).forEach(t=>{ seen[t] = (seen[t]||0) + 1; }));
+  const limit = Math.max(4, pages.length / 3);
+  const segs = [];
+  pages.forEach((items,k)=>{
+    const txt = squash(items.filter(t=>seen[t] < limit || t.length > 80).join(" "));
+    chunks(txt).forEach(t=>segs.push({loc:`PDF p. ${k+1}`, text:t}));
+  });
   return {name, segments:segs};
 }
 
@@ -1694,7 +1704,6 @@ function renderAnalyse(){
     const rows = shown.slice(0,40).map(p=>`
       <div class="pass">
         <div class="pass-head">
-          ${pill(p.verdict)}
           <span class="src">${esc(p.doc)} · ${esc(p.loc)}</span>
           ${p.ai ? "" : `<span class="chip g">general — عام</span>`}
           <button class="btn mini" data-copy="${esc(p.text).slice(0,0)}"
@@ -1710,13 +1719,15 @@ function renderAnalyse(){
         <em>${shown.length} مقطعاً${AIONLY ? ` تذكر الذكاء الاصطناعي (من ${h.passages.length})` : ""}</em>
       </p>
       ${semBlock(h.n)}
-      ${shown.length ? rows : `<p class="note">${AIONLY
+      ${shown.length ? `<details ${SEM.state === "ready" ? "" : "open"}>
+        <summary style="cursor:pointer;font-size:13px;font-weight:600;margin-bottom:10px">All ${shown.length} passages — كل المقاطع (${shown.length})</summary>
+        ${rows}
+        ${shown.length > 40 ? `<p class="note">The first 40 of ${shown.length}.<em>أول أربعين من ${shown.length}.</em></p>` : ""}
+      </details>` : `<p class="note">${AIONLY
         ? `None of the ${h.passages.length} passages for this dimension names AI.
            <em>لا يذكر الذكاء الاصطناعي أيٌّ من مقاطع هذا البُعد.</em>`
         : `Nothing in these documents mentions this dimension.
            <em>لا شيء في هذه الوثائق يتناول هذا البُعد.</em>`}</p>`}
-      ${shown.length > 40 ? `<p class="note">Showing the 40 passages with the most signals,
-        of ${shown.length}.<em>تُعرض أربعون مقطعاً بأكثر الإشارات من أصل ${shown.length}.</em></p>` : ""}
     </div>`;
   }).join("");
 
@@ -1734,8 +1745,8 @@ function renderAnalyse(){
     <div style="margin-top:14px">${docList}</div>
     ${DOCS.length ? `<div class="row" style="margin-top:14px;align-items:center">
       <button class="btn ${AIONLY?"primary":""}" id="aitoggle">${AIONLY
-        ? "\u2713  AI only — الذكاء الاصطناعي فقط"
-        : "All passages — كل المقاطع"}</button>
+        ? "\u2713  Filter: passages that mention AI — تصفية: المقاطع التي تذكر الذكاء الاصطناعي"
+        : "Filter off: all passages — بلا تصفية: كل المقاطع"}</button>
     </div>` : ""}
     <details style="margin-top:14px">
       <summary class="note" style="cursor:pointer">Or paste the text — أو الصق النص</summary>
@@ -1921,7 +1932,8 @@ function semRank(q, off, onlyAI, k, words, gate){
     if(!doc.vecs) return;
     doc.segments.forEach((seg,i)=>{
       if(seg.text.length < SEM_MINLEN) return;
-      if(gate && !gate(seg.text)) return;
+      /* a table's rows often sit in a passage below its heading: the heading counts */
+      if(gate && !gate(seg.text) && !(i > 0 && doc.segments[i-1].loc === seg.loc && gate(doc.segments[i-1].text))) return;
       if(onlyAI && !AI_RE.test(seg.text)) return;
       let s = 0; const b = i * SEM_DIM;
       for(let j=0;j<SEM_DIM;j++) s += q[off+j] * doc.vecs[b+j];
@@ -1963,7 +1975,7 @@ function searchCard(){
     : `<p class="note">No passage found.<em>لم يُعثر على مقطع.</em></p>`;
   return `<div class="card">
     <h3>Ask the documents</h3>
-    <div class="arh">اسأل الوثائق — بحثٌ بالمعنى لا بالكلمات</div>
+    <div class="arh">اسأل الوثائق</div>
     ${SEM.state === "off" || SEM.state === "error" ? `
       <div class="row"><button class="btn primary" id="sem-on">Turn on AI search — تشغيل البحث الذكي</button></div>
       <p class="note">First time only: downloads about 120 MB. Use Wi-Fi.
