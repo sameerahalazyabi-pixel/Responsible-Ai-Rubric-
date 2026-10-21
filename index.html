@@ -1715,12 +1715,12 @@ function renderAnalyse(){
       <h3>D${d.n} · ${esc(d.en)}</h3>
       <div class="arh">${esc(d.ar)}</div>
       <p class="note" style="margin-bottom:14px">
-        <strong>${shown.length}</strong> passages${AIONLY ? ` mention AI (of ${h.passages.length})` : ""}
+        <strong>${shown.length}</strong> ${shown.length === 1 ? "passage" : "passages"}${AIONLY ? ` ${shown.length === 1 ? "mentions" : "mention"} AI (of ${h.passages.length})` : ""}
         <em>${shown.length} مقطعاً${AIONLY ? ` تذكر الذكاء الاصطناعي (من ${h.passages.length})` : ""}</em>
       </p>
       ${semBlock(h.n)}
       ${shown.length ? `<details ${SEM.state === "ready" ? "" : "open"}>
-        <summary style="cursor:pointer;font-size:13px;font-weight:600;margin-bottom:10px">All ${shown.length} passages — كل المقاطع (${shown.length})</summary>
+        <summary style="cursor:pointer;font-size:13px;font-weight:600;margin-bottom:10px">${shown.length === 1 ? "The passage" : `All ${shown.length} passages`} — كل المقاطع (${shown.length})</summary>
         ${rows}
         ${shown.length > 40 ? `<p class="note">The first 40 of ${shown.length}.<em>أول أربعين من ${shown.length}.</em></p>` : ""}
       </details>` : `<p class="note">${AIONLY
@@ -1930,10 +1930,12 @@ function semRank(q, off, onlyAI, k, words, gate){
   const all = [];
   DOCS.forEach(doc=>{
     if(!doc.vecs) return;
+    const pages = gate ? new Set(doc.segments.filter(o=>gate(o.text)).map(o=>o.loc)) : null;
     doc.segments.forEach((seg,i)=>{
       if(seg.text.length < SEM_MINLEN) return;
-      /* a table's rows often sit in a passage below its heading: the heading counts */
-      if(gate && !gate(seg.text) && !(i > 0 && doc.segments[i-1].loc === seg.loc && gate(doc.segments[i-1].text))) return;
+      /* a table's rows often sit apart from its heading: a passage also qualifies
+         when the page it stands on names the dimension */
+      if(gate && !pages.has(seg.loc)) return;
       if(onlyAI && !AI_RE.test(seg.text)) return;
       let s = 0; const b = i * SEM_DIM;
       for(let j=0;j<SEM_DIM;j++) s += q[off+j] * doc.vecs[b+j];
