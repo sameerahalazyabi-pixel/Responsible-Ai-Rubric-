@@ -1931,8 +1931,14 @@ async function semIndex(){
   try{
     for(const doc of todo){
       const vecs = new Float32Array(doc.segments.length * SEM_DIM);
+      /* each passage is read with the opening of its page, so a table's rows carry
+         the heading that says what the table is; the passage shown stays as it is */
+      const head = {};
+      doc.segments.forEach(sg=>{ if(!(sg.loc in head)) head[sg.loc] = sg.text; });
+      const withHead = sg => head[sg.loc] === sg.text ? sg.text
+        : head[sg.loc].slice(0, 200) + " … " + sg.text;
       for(let i=0; i<doc.segments.length; i+=8){
-        const batch = doc.segments.slice(i, i+8).map(s=>"passage: " + s.text);
+        const batch = doc.segments.slice(i, i+8).map(s=>"passage: " + withHead(s));
         vecs.set(await semEmbed(batch), i * SEM_DIM);
         done += batch.length;
         SEM.pct = Math.round(done/total*100); semPaint();
