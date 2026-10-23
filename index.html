@@ -675,6 +675,10 @@ async function unzip(buf){
 
 async function readXlsx(buf){
   const parts = await unzip(buf);
+  /* some writers prefix every element (<x:row>, <x:c>); drop the prefixes so all
+     valid workbooks read the same way */
+  Object.keys(parts).forEach(k=>{ if(/\.xml$/.test(k))
+    parts[k] = parts[k].replace(/<(\/?)[A-Za-z][\w.-]*:(?=[A-Za-z])/g, "<$1"); });
   const shared = [];
   const ss = parts["xl/sharedStrings.xml"];
   if(ss) (ss.match(/<si>[\s\S]*?<\/si>/g) || []).forEach(si=>{
@@ -976,6 +980,15 @@ function addFiles(list){
 }
 
 /* ===================== NUMBERS ===================== */
+/* The band is assigned on the relative gap. Where nothing is declared (Σ Say = 0)
+   the relative gap is undefined: practice without declaration is positive
+   decoupling, and nothing on either face cannot be classified. */
+function classify(t){
+  if(t.say === 0) return t.do > 0 ? band(-1)
+    : {k:"Not classifiable", ar:"غير قابل للتصنيف", c:"b-pend"};
+  return band(t.gapRel);
+}
+
 function totals(set){
   let say=0, dou=0, nS=0, nD=0;
   set.rows.forEach(r=>{ if(r.face==="Say"){ say+=r.score; nS++; } else { dou+=r.score; nD++; } });
@@ -1070,7 +1083,7 @@ function renderResults(){
   }
 
   const tbl = live.map(s=>{
-    const t = totals(s), b = band(t.gapAbs);
+    const t = totals(s), b = classify(t);
     const pill = t.whole
       ? `<span class="pill ${b.c}"><span class="dot"></span>${b.k}</span>
          <div class="ar" style="font-size:11px;color:var(--ink-3)">${b.ar}</div>`
@@ -1135,8 +1148,8 @@ function renderResults(){
           <th>Band <div class="ar">النطاق</div></th></tr>
       ${tbl}</table></div>
     <p class="note" style="margin-top:12px">Σ Say is the total declared and Σ Do the total evidenced, each out of 27.
-      Gap<sub>abs</sub> expresses the distance between them as a share of the full scale; Gap<sub>rel</sub> expresses it as a share of the declaration itself.
-      <em>مجموع الإعلان ومجموع الممارسة، كلٌّ منهما من سبعٍ وعشرين. وتُنسَب الفجوة المطلقة إلى المقياس كاملاً، وتُنسَب النسبية إلى الإعلان وحده، فتدلّ على ما أُعلن ولم يقم عليه دليل.</em></p>
+      Gap<sub>rel</sub> expresses the distance as a share of the declaration itself and sets the band; Gap<sub>abs</sub> expresses it as a share of the full scale and is used to compare organizations.
+      <em>مجموع الإعلان ومجموع الممارسة، كلٌّ منهما من سبعٍ وعشرين. وتُنسَب الفجوة النسبية إلى الإعلان وحده، فتدلّ على ما أُعلن ولم يقم عليه دليل، وعليها يُبنى التصنيف. وتُنسَب الفجوة المطلقة إلى المقياس كاملاً، وتُستعمل للمقارنة بين المنظمات.</em></p>
   </div>
   <div class="card">
     <h3>Declaration against practice</h3>
@@ -1181,7 +1194,7 @@ function logText(){
   lines.push("");
   lines.push(["SUMMARY","Coder","Sigma Say /27","Sigma Do /27","Gap_abs","Gap_rel","Band"].join("\t"));
   SETS.filter(s=>s.rows.length).forEach(s=>{
-    const t = totals(s), b = band(t.gapAbs);
+    const t = totals(s), b = classify(t);
     lines.push([s.org, s.coder, t.say, t.do, t.gapAbs.toFixed(1)+"%",
       t.gapRel===null?"n/a":t.gapRel.toFixed(1)+"%",
       t.whole?b.k:"incomplete"].join("\t"));
@@ -1288,7 +1301,9 @@ function renderRef(){
     <p class="note">Nine dimensions scored 0–3 on one face give 27, the maximum a single face can reach.
       <em>تسعة أبعاد تُرمَّز من ٠ إلى ٣ على وجه واحد، فيكون حاصلها ٢٧، وهو أقصى ما يبلغه وجه واحد.</em></p>
     <div class="scroll" style="margin-top:14px"><table>
-      <tr><th>Gap<sub>abs</sub></th><th>Band <div class="ar">النطاق</div></th></tr>${bands}</table></div>
+      <tr><th>Gap<sub>rel</sub></th><th>Band <div class="ar">النطاق</div></th></tr>${bands}</table></div>
+    <p class="note" style="margin-top:10px">Where Σ Say = 0, the relative gap is undefined: Σ Do above zero is Positive Decoupling; zero on both faces is not classified.
+      <em>إذا كان مجموع الإعلان صفراً لم تُحسب الفجوة النسبية: فإن زاد مجموع الممارسة على الصفر فهو انفصال إيجابي، وإن كان الوجهان صفراً لم يُصنَّف.</em></p>
   </div>
   <div class="card">
     <h3>The general scale</h3><div class="arh">المقياس العام المنطبق على الأبعاد جميعها</div>
