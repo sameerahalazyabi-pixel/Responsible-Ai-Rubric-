@@ -1350,7 +1350,6 @@ document.addEventListener("click", e=>{
   if(dd){ DOCS.splice(+dd.dataset.docdel,1); HITS = DOCS.length ? buildIndex() : null;
           render(); return; }
   if(e.target.id === "sem-on"){ semStart(); return; }
-  if(e.target.id === "sem-go"){ const q = document.getElementById("sem-q"); if(q) semSearch(q.value); return; }
   const cp = e.target.closest("[data-copytext]");
   if(cp){
     const txt = cp.dataset.copytext;
@@ -1372,7 +1371,6 @@ document.addEventListener("click", e=>{
 });
 
 document.addEventListener("keydown", e=>{
-  if(e.key === "Enter" && e.target.id === "sem-q"){ e.preventDefault(); semSearch(e.target.value); }
 });
 
 document.addEventListener("change", e=>{
@@ -1965,19 +1963,13 @@ async function semIndex(){
   }catch(err){
     SEM.state = "error"; SEM.err = (err && err.message) || String(err);
   }
-  if(SEM.query) await semSearch(SEM.query, true); else renderAnalyse();
+  renderAnalyse();
 }
 
 /* rank every passage against one query vector */
 /* Short fragments (running headers, link lists, captions) sit close to every query
-   in this model's space, so they are left out of the ranking. Words of the question
-   found verbatim in a passage add a small bonus. */
+   in this model's space, so they are left out of the ranking. */
 const SEM_MINLEN = 150;
-const STOP = new Set("the and for are does did has have with that this from what which who how its into their there about published publish company organization organisation هل هي هو في من على عن إلى الى ما ماذا كيف التي الذي هذه هذا الشركة المنظمة تنشر".split(" "));
-function semWords(t){
-  return (t||"").toLowerCase().split(/[^a-z0-9\u0600-\u06ff]+/)
-    .filter(w=>w.length > 2 && !STOP.has(w));
-}
 function semRank(q, off, onlyAI, k, words, gate){
   const all = [];
   DOCS.forEach(doc=>{
@@ -2002,16 +1994,6 @@ function semRank(q, off, onlyAI, k, words, gate){
   return all.slice(0, k);
 }
 
-async function semSearch(text, quiet){
-  SEM.query = text.trim();
-  if(!SEM.query){ SEM.results = null; renderAnalyse(); return; }
-  if(SEM.state !== "ready") return;
-  const q = await semEmbed(["query: " + SEM.query]);
-  SEM.results = semRank(q, 0, false, 8, semWords(SEM.query));
-  renderAnalyse();
-  if(!quiet){ const r = document.getElementById("sem-res"); if(r) r.scrollIntoView({block:"nearest"}); }
-}
-
 const semPass = p => `
   <div class="pass">
     <div class="pass-head">
@@ -2025,11 +2007,9 @@ const semPass = p => `
 function searchCard(){
   const on = SEM.state === "ready";
   const busy = SEM.state === "loading" || SEM.state === "indexing";
-  const res = !SEM.results ? "" : SEM.results.length ? SEM.results.map(semPass).join("")
-    : `<p class="note">No passage found.<em>لم يُعثر على مقطع.</em></p>`;
   return `<div class="card">
-    <h3>Ask the documents</h3>
-    <div class="arh">اسأل الوثائق</div>
+    <h3>AI evidence search</h3>
+    <div class="arh">البحث الذكي عن الأدلة</div>
     ${SEM.state === "off" || SEM.state === "error" ? `
       <div class="row"><button class="btn primary" id="sem-on">Turn on AI search — تشغيل البحث الذكي</button></div>
       <p class="note">First time only: downloads about 120 MB. Use Wi-Fi.
@@ -2037,14 +2017,9 @@ function searchCard(){
     ${SEM.state !== "off" ? `
       <div class="track" style="height:8px;margin:4px 0 6px"><b id="sem-bar" style="width:${on?100:SEM.pct}%;background:linear-gradient(90deg,var(--say),var(--say-2))"></b></div>
       <div class="note" id="sem-status" style="${SEM.state==="error"?"color:var(--bad)":""}">${esc(semStatus())}</div>` : ""}
-    ${on || busy ? `
-      <div class="row" style="margin-top:12px">
-        <div class="field" style="flex:1 1 260px"><label for="sem-q">Question <span>السؤال</span></label>
-          <input type="text" id="sem-q" value="${esc(SEM.query)}" ${on?"":"disabled"}
-            placeholder="Does the company publish an AI risk register? — هل تنشر الشركة سجلاً لمخاطر الذكاء الاصطناعي؟"></div>
-        <button class="btn primary" id="sem-go" ${on?"":"disabled"}>Search — بحث</button>
-      </div>
-      <div id="sem-res">${res}</div>` : ""}
+    ${on ? `
+      <p class="note" style="margin-top:10px">Relevant passages now appear under each dimension below.
+        <em>تظهر المقاطع ذات الصلة الآن تحت كل بُعد في الأسفل.</em></p>` : ""}
   </div>`;
 }
 
