@@ -1169,38 +1169,9 @@ function renderResults(){
       <em>كل سطرٍ بُعدٌ واحد، والرقم فيه درجة الإعلان منقوصاً منها درجة الممارسة. فالصفر تطابقٌ بينهما، والموجب إعلانٌ لم يبلغه الدليل، والسالب ممارسةٌ لم يَدَّعِها الإعلان.</em></p>
     ${matrix}
   </div>
-  <div class="card">
-    <h3>Coding log</h3><div class="arh">يُنسَخ ويُلصَق في ملحق الدراسة</div>
-    <div class="row">
-      <button class="btn primary" id="copylog">Copy — نسخ</button>
-      <span class="note" id="copymsg"></span></div>
-    <textarea class="out" id="logbox" readonly>${esc(logText())}</textarea>
-  </div>`;
+`;
 }
 
-function logText(){
-  const flat = v => String(v||"").replace(/\s+/g," ").trim();
-  const lines = [["Coder","Organization","Dimension","Facet","Score","Source title",
-                  "URL","Accessed","Locator","Quotation","Reasoning"].join("\t")];
-  SETS.forEach(s=>{
-    DIMS.forEach((d,i)=>FACES.forEach(face=>{
-      const c = cellOf(s,i,face);
-      if(!c) return;
-      lines.push([s.coder, s.org, `D${d.n} ${d.en}`, face, c.score, flat(c.title),
-        flat(c.url), flat(c.acc), flat(c.loc), flat(c.quote),
-        flat(c.why)].join("\t"));
-    }));
-  });
-  lines.push("");
-  lines.push(["SUMMARY","Coder","Sigma Say /27","Sigma Do /27","Gap_abs","Gap_rel","Band"].join("\t"));
-  SETS.filter(s=>s.rows.length).forEach(s=>{
-    const t = totals(s), b = classify(t);
-    lines.push([s.org, s.coder, t.say, t.do, t.gapAbs.toFixed(1)+"%",
-      t.gapRel===null?"n/a":t.gapRel.toFixed(1)+"%",
-      t.whole?b.k:"incomplete"].join("\t"));
-  });
-  return lines.join("\n");
-}
 
 function renderRel(){
   const el = document.getElementById("t-rel");
@@ -1259,8 +1230,6 @@ function renderRel(){
       <tr><th>Cell <div class="ar">الخلية</div></th>
           <th>${esc(A.coder)}</th><th>${esc(B.coder)}</th><th>Δ</th></tr>
       ${rows}</table></div>
-    <p class="note" style="margin-top:12px;color:var(--warn)">κ is recorded before any score is changed.
-      <em>يُسجَّل معامل كابا قبل تعديل أي درجة؛ فالفصل الرابع يعتمد قيمته على الترميز الأول المستقل.</em></p>
   </div>`;
 }
 
@@ -1360,14 +1329,6 @@ document.addEventListener("click", e=>{
   const del = e.target.closest("[data-del]");
   if(del){ SETS = SETS.filter(s=>s.id !== +del.dataset.del);
            PAIR = [0, SETS.length>1?1:0]; render(); return; }
-  if(e.target.id === "copylog"){
-    const box = document.getElementById("logbox"), msg = document.getElementById("copymsg");
-    const done = ()=>{ msg.textContent = "Copied — تم النسخ"; setTimeout(()=>msg.textContent="",2600); };
-    const fallback = ()=>{ box.focus(); box.select();
-      msg.textContent = "Selected — press ⌘/Ctrl+C — حُدِّد النص — ⌘/Ctrl+C"; };
-    try{ navigator.clipboard.writeText(box.value).then(done, fallback); }catch(err){ fallback(); }
-    return;
-  }
 });
 
 document.addEventListener("keydown", e=>{
